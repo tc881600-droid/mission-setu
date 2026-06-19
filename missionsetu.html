@@ -1,0 +1,3522 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Route Resilience | Occlusion-Aware Road Extraction & Criticality Analysis</title>
+  <meta name="description"
+    content="ISRO BAH Hackathon PS-04 — end-to-end pipeline for occlusion-robust road extraction, topological healing, and graph-theoretic urban resilience." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --bg: #020308;
+      --bg-light: #0a1020;
+      --card: rgba(12, 18, 34, 0.62);
+      --orange: #ff4d00;
+      --orange-glow: rgba(255, 77, 0, 0.55);
+      --blue: #00d4ff;
+      --blue-glow: rgba(0, 212, 255, 0.45);
+      --green: #22c55e;
+      --green-glow: rgba(34, 197, 94, 0.45);
+      --red: #ef4444;
+      --yellow: #eab308;
+      --purple: #a855f7;
+      --purple-glow: rgba(168, 85, 247, 0.45);
+      --sun: #ff9d00;
+      --text: #ffffff;
+      --muted: #8b9bb4;
+      --border: rgba(255, 255, 255, 0.08);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: auto;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    ::selection {
+      background: rgba(255, 77, 0, 0.35);
+      color: #fff;
+    }
+
+    .logo-svg {
+      width: 42px;
+      height: 42px;
+      flex-shrink: 0;
+      filter: drop-shadow(0 0 8px rgba(255, 77, 0, 0.3));
+      transition: all 0.3s ease;
+    }
+
+    .loader-logo .logo-svg {
+      width: 64px;
+      height: 64px;
+      filter: drop-shadow(0 0 20px rgba(255, 77, 0, 0.5));
+    }
+
+    .loading-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: #020308;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.9s ease, visibility 0.9s;
+    }
+
+    .loading-screen.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loader-canvas {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+
+    .loader-content {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.6rem;
+    }
+
+    .loader-logo {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      opacity: 0;
+      animation: loaderFadeIn 0.7s 0.3s forwards;
+    }
+
+    .loader-logo-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1;
+    }
+
+    .loader-logo-text .top {
+      font-family: 'Orbitron';
+      font-size: 0.55rem;
+      letter-spacing: 0.22em;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .loader-logo-text .bottom {
+      font-family: 'Orbitron';
+      font-size: 1.4rem;
+      font-weight: 900;
+      color: var(--orange);
+      text-shadow: 0 0 20px var(--orange-glow);
+    }
+
+    .loader-tagline {
+      font-family: 'Rajdhani';
+      font-size: 0.72rem;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--muted);
+      opacity: 0;
+      animation: loaderFadeIn 0.6s 0.8s forwards;
+    }
+
+    .loader-bar-wrap {
+      width: 280px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      overflow: hidden;
+      opacity: 0;
+      animation: loaderFadeIn 0.5s 1s forwards;
+    }
+
+    .loader-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--orange), var(--blue));
+      box-shadow: 0 0 12px var(--orange-glow);
+      transition: width 0.15s ease;
+    }
+
+    .loader-percent {
+      font-family: 'JetBrains Mono';
+      font-size: 0.65rem;
+      color: rgba(255, 255, 255, 0.4);
+      letter-spacing: 0.1em;
+      opacity: 0;
+      animation: loaderFadeIn 0.5s 1.2s forwards;
+    }
+
+    .loader-status {
+      font-family: 'JetBrains Mono';
+      font-size: 0.55rem;
+      color: rgba(255, 255, 255, 0.25);
+      letter-spacing: 0.05em;
+      opacity: 0;
+      animation: loaderFadeIn 0.5s 1.4s forwards;
+      max-width: 320px;
+      text-align: center;
+    }
+
+    @keyframes loaderFadeIn {
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.25;
+      }
+    }
+
+    .grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9990;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9991;
+      background: radial-gradient(circle at center, transparent 40%, rgba(0, 0, 0, 0.55) 100%);
+    }
+
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9992;
+      opacity: 0.04;
+      background: linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 50%, transparent 50%);
+      background-size: 100% 4px;
+    }
+
+    .scroll-progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--orange), var(--blue), var(--purple));
+      z-index: 10001;
+      width: 0%;
+      box-shadow: 0 0 12px var(--orange);
+    }
+
+    ::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(2, 3, 8, 0.95);
+      border-left: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, var(--orange) 0%, #ff8c00 30%, var(--blue) 70%, #0066ff 100%);
+      border-radius: 999px;
+    }
+
+    .dot-nav {
+      position: fixed;
+      right: 1.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .dot-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      cursor: pointer;
+      flex-direction: row;
+      justify-content: flex-end;
+    }
+
+    .dot-nav-item .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255, 255, 255, 0.22);
+      background: transparent;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+
+    .dot-nav-item.active .dot {
+      background: var(--orange);
+      border-color: var(--orange);
+      box-shadow: 0 0 12px var(--orange-glow);
+      transform: scale(1.25);
+    }
+
+    .dot-nav-item .dot-label {
+      font-family: 'Rajdhani';
+      font-size: 0.58rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0);
+      white-space: nowrap;
+      transition: all 0.25s ease;
+      pointer-events: none;
+    }
+
+    .dot-nav-item:hover .dot-label {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .dot-nav-item.active .dot-label {
+      color: var(--orange);
+    }
+
+    @media (max-width: 900px) {
+      .dot-nav {
+        display: none;
+      }
+    }
+
+    .nav-fixed {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 10000;
+      padding: 1rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: transparent;
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .nav-scrolled {
+      background: rgba(2, 3, 8, 0.92);
+      backdrop-filter: blur(24px) saturate(160%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 0.65rem 2.5rem;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      text-decoration: none;
+      transition: transform 0.3s ease;
+    }
+
+    .nav-logo:hover {
+      transform: scale(1.04);
+    }
+
+    .nav-logo:hover .logo-svg {
+      filter: drop-shadow(0 0 16px rgba(255, 77, 0, 0.5));
+    }
+
+    .nav-logo-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1;
+    }
+
+    .nav-logo-text .top {
+      font-family: 'Orbitron';
+      font-size: 0.52rem;
+      letter-spacing: 0.18em;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .nav-logo-text .bottom {
+      font-family: 'Orbitron';
+      font-size: 0.95rem;
+      font-weight: 900;
+      color: var(--orange);
+      text-shadow: 0 0 15px var(--orange-glow);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .nav-links a {
+      font-family: 'Rajdhani';
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.55);
+      transition: 0.3s;
+      position: relative;
+      padding: 0.25rem 0;
+      text-decoration: none;
+    }
+
+    .nav-links a::after {
+      content: '';
+      position: absolute;
+      bottom: -3px;
+      left: 0;
+      width: 0;
+      height: 1.5px;
+      background: var(--orange);
+      transition: width 0.3s;
+      box-shadow: 0 0 6px var(--orange);
+    }
+
+    .nav-links a:hover {
+      color: var(--orange);
+    }
+
+    .nav-links a:hover::after {
+      width: 100%;
+    }
+
+    .nav-links a.active {
+      color: var(--orange);
+    }
+
+    .nav-links a.active::after {
+      width: 100%;
+    }
+
+    .nav-badge {
+      background: rgba(255, 77, 0, 0.12);
+      color: var(--orange);
+      border: 1px solid rgba(255, 77, 0, 0.3);
+      padding: 0.45rem 1rem;
+      border-radius: 999px;
+      font-family: 'JetBrains Mono';
+      font-size: 0.58rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: 0.3s;
+    }
+
+    .nav-badge:hover {
+      background: rgba(255, 77, 0, 0.2);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 77, 0, 0.15);
+    }
+
+    .nav-badge .pulse {
+      width: 6px;
+      height: 6px;
+      background: var(--orange);
+      border-radius: 50%;
+      animation: blink 1.5s infinite;
+    }
+
+    .mobile-menu-btn {
+      display: none;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 1.3rem;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    .mobile-menu-btn:hover {
+      color: var(--orange);
+      transform: rotate(90deg);
+    }
+
+    @media (max-width: 1024px) {
+      .nav-links {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(2, 3, 8, 0.98);
+        backdrop-filter: blur(20px);
+        flex-direction: column;
+        justify-content: center;
+        gap: 2rem;
+        z-index: 9999;
+      }
+
+      .nav-links.active {
+        display: flex;
+      }
+
+      .nav-badge {
+        display: none;
+      }
+
+      .mobile-menu-btn {
+        display: block;
+        z-index: 10002;
+        position: relative;
+      }
+    }
+
+    .section {
+      position: relative;
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      padding: 8rem 0;
+    }
+
+    .section-bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 0;
+      opacity: 0.35;
+      filter: saturate(0.8) contrast(1.1);
+    }
+
+    .section-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    .section-content {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 2.5rem;
+    }
+
+    .section-label {
+      font-family: 'Rajdhani';
+      font-size: 0.7rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--orange);
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .section-label::before {
+      content: '';
+      width: 28px;
+      height: 1px;
+      background: var(--orange);
+      box-shadow: 0 0 6px var(--orange);
+    }
+
+    .section-title {
+      font-size: clamp(1.8rem, 3.8vw, 3.2rem);
+      line-height: 1.05;
+      margin-bottom: 1.1rem;
+    }
+
+    .section-title span {
+      color: var(--orange);
+      text-shadow: 0 0 25px rgba(255, 77, 0, 0.25);
+    }
+
+    .section-desc {
+      font-family: 'Rajdhani';
+      font-size: 1rem;
+      color: var(--muted);
+      line-height: 1.75;
+      max-width: 520px;
+      margin-bottom: 1.6rem;
+    }
+
+    .section-index {
+      position: absolute;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: rgba(2, 3, 8, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+      padding: 0.55rem 1.2rem;
+      border-radius: 999px;
+      font-family: 'Rajdhani';
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+    }
+
+    .section-index .num {
+      font-family: 'Orbitron';
+      font-size: 0.85rem;
+      color: var(--orange);
+      font-weight: 800;
+    }
+
+    .section-index .divider {
+      width: 1px;
+      height: 14px;
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 1.2rem;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      backdrop-filter: blur(18px) saturate(150%);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(255, 77, 0, 0.25);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35), 0 0 30px rgba(255, 77, 0, 0.08);
+    }
+
+    .card-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+      transition: 0.3s;
+    }
+
+    .card:hover .card-icon {
+      transform: scale(1.1);
+    }
+
+    .card-icon.orange {
+      background: rgba(255, 77, 0, 0.12);
+      color: var(--orange);
+      border: 1px solid rgba(255, 77, 0, 0.2);
+    }
+
+    .card-icon.blue {
+      background: rgba(0, 212, 255, 0.1);
+      color: var(--blue);
+      border: 1px solid rgba(0, 212, 255, 0.2);
+    }
+
+    .card-icon.green {
+      background: rgba(34, 197, 94, 0.1);
+      color: var(--green);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+
+    .card-icon.purple {
+      background: rgba(168, 85, 247, 0.1);
+      color: var(--purple);
+      border: 1px solid rgba(168, 85, 247, 0.2);
+    }
+
+    .card-icon.red {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--red);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .card-icon.yellow {
+      background: rgba(234, 179, 8, 0.1);
+      color: var(--yellow);
+      border: 1px solid rgba(234, 179, 8, 0.2);
+    }
+
+    .card h4 {
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.04em;
+      line-height: 1.3;
+    }
+
+    .card p {
+      font-family: 'Rajdhani';
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .hero {
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    .hero-overlay {
+      background: radial-gradient(circle at 70% 50%, transparent 0%, rgba(2, 3, 8, 0.35) 45%, rgba(2, 3, 8, 0.98) 100%);
+      pointer-events: none;
+    }
+
+    .hero-layout {
+      display: grid;
+      grid-template-columns: 0.5fr 1fr;
+      min-height: 100vh;
+      align-items: center;
+      position: relative;
+      z-index: 10;
+    }
+
+    .hero-left {
+      padding: 5rem 2.5rem 2rem 4rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 1.5rem;
+      max-width: 650px;
+      min-height: 100vh;
+    }
+
+    .hero-title {
+      font-size: clamp(2.4rem, 5.2vw, 5rem);
+      line-height: 0.95;
+    }
+
+    .hero-title .white {
+      color: #fff;
+      display: block;
+    }
+
+    .hero-title .orange {
+      color: var(--orange);
+      text-shadow: 0 0 35px var(--orange-glow);
+      display: block;
+    }
+
+    .hero-subtitle {
+      font-family: 'Rajdhani';
+      font-size: clamp(0.9rem, 1.6vw, 1.15rem);
+      color: var(--blue);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    .hero-desc {
+      font-family: 'Rajdhani';
+      font-size: 1rem;
+      color: var(--muted);
+      line-height: 1.8;
+      max-width: 480px;
+    }
+
+    .btn-explore {
+      background: var(--orange);
+      color: #fff;
+      border: none;
+      padding: 0.85rem 1.7rem;
+      border-radius: 999px;
+      font-family: 'Orbitron';
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      width: fit-content;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
+      text-decoration: none;
+    }
+
+    .btn-explore::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+      transform: translateX(-100%);
+      transition: transform 0.6s;
+    }
+
+    .btn-explore:hover {
+      background: #ff6a00;
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 14px 40px var(--orange-glow);
+    }
+
+    .btn-explore:hover::before {
+      transform: translateX(100%);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--blue);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.85rem 1.7rem;
+      border-radius: 999px;
+      font-family: 'Orbitron';
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      width: fit-content;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      text-decoration: none;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(0, 212, 255, 0.08);
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 14px 40px var(--blue-glow);
+      border-color: var(--blue);
+    }
+
+    .scroll-hint {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      font-family: 'Rajdhani';
+      font-size: 0.65rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-top: 1rem;
+    }
+
+    .scroll-hint i {
+      animation: bounce 2s infinite;
+      color: var(--blue);
+    }
+
+    @keyframes bounce {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(5px);
+      }
+    }
+
+    #globeContainer {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .globe-label {
+      position: absolute;
+      bottom: 2.5rem;
+      right: 2.5rem;
+      z-index: 5;
+      font-family: 'Rajdhani';
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      text-transform: uppercase;
+      background: rgba(2, 3, 8, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 0.5rem 1rem;
+      border-radius: 999px;
+      backdrop-filter: blur(10px);
+    }
+
+    .globe-label i {
+      color: var(--orange);
+      margin-right: 0.4rem;
+    }
+
+    .hero-stats {
+      position: absolute;
+      right: 2.5rem;
+      top: 58%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      z-index: 20;
+    }
+
+    .stat-card {
+      background: rgba(2, 3, 8, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 0.9rem;
+      padding: 1rem;
+      min-width: 180px;
+      backdrop-filter: blur(16px) saturate(160%);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .stat-card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(255, 77, 0, 0.35);
+      box-shadow: 0 16px 35px rgba(0, 0, 0, 0.35), 0 0 25px rgba(255, 77, 0, 0.12);
+      background: rgba(2, 3, 8, 0.75);
+    }
+
+    .stat-card .value {
+      font-family: 'Orbitron';
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #fff;
+      transition: 0.3s;
+    }
+
+    .stat-card:hover .value {
+      color: var(--orange);
+    }
+
+    .stat-card .label {
+      font-family: 'Rajdhani';
+      font-size: 0.62rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 0.2rem;
+    }
+
+    .stat-card i {
+      color: var(--orange);
+      font-size: 1rem;
+      margin-bottom: 0.55rem;
+    }
+
+    @media (max-width: 1024px) {
+      .hero-layout {
+        grid-template-columns: 1fr;
+        min-height: auto;
+        padding: 0;
+      }
+
+      .hero-left {
+        padding: 5rem 2rem 3rem;
+        max-width: 100%;
+        min-height: auto;
+      }
+
+      .hero-stats {
+        position: static;
+        transform: none;
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin: 0 2rem 2rem;
+      }
+
+      .globe-label {
+        position: relative;
+        bottom: auto;
+        right: auto;
+        margin: 0 2rem 2rem;
+        width: fit-content;
+      }
+
+      .hero-title {
+        font-size: clamp(1.9rem, 9vw, 3.8rem);
+      }
+
+      .section-index {
+        bottom: 1.2rem;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .hero-left {
+        padding: 4.5rem 1.5rem 2.5rem;
+      }
+    }
+
+    .split-section .section-content {
+      display: grid;
+      grid-template-columns: 0.45fr 1fr;
+      gap: 3.5rem;
+      align-items: center;
+    }
+
+    .split-section .section-overlay {
+      background: linear-gradient(90deg, rgba(2, 3, 8, 0.96) 0%, rgba(2, 3, 8, 0.75) 45%, rgba(2, 3, 8, 0.35) 100%);
+    }
+
+    @media (max-width: 1024px) {
+      .split-section .section-content {
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+      }
+    }
+
+    .center-section .section-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .center-section .section-content>.intro-block {
+      max-width: 800px;
+      margin-bottom: 2.5rem;
+    }
+
+    .center-section .section-overlay {
+      background: linear-gradient(180deg, rgba(2, 3, 8, 0.96) 0%, rgba(2, 3, 8, 0.88) 100%);
+    }
+
+    .problem-section .section-overlay {
+      background: linear-gradient(90deg, rgba(2, 3, 8, 0.95) 0%, rgba(2, 3, 8, 0.75) 50%, rgba(2, 3, 8, 0.35) 100%);
+    }
+
+    .challenge-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 1rem;
+      padding: 1.4rem;
+      transition: all 0.3s ease;
+    }
+
+    .challenge-card:hover {
+      border-color: rgba(255, 77, 0, 0.25);
+      transform: translateY(-4px);
+      background: rgba(255, 77, 0, 0.04);
+    }
+
+    .challenge-card h4 {
+      font-size: 0.78rem;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+
+    .challenge-card p {
+      font-family: 'Rajdhani';
+      font-size: 0.92rem;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .pipeline-card {
+      background: rgba(2, 3, 8, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 1rem;
+      padding: 1.6rem;
+      backdrop-filter: blur(18px);
+    }
+
+    .pipeline-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .pipeline-step:last-child {
+      margin-bottom: 0;
+    }
+
+    .pipeline-step .num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--orange);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Orbitron';
+      font-size: 0.75rem;
+      font-weight: 800;
+      flex-shrink: 0;
+      box-shadow: 0 0 14px var(--orange-glow);
+    }
+
+    .pipeline-step .text h4 {
+      font-size: 0.75rem;
+      margin-bottom: 0.25rem;
+      color: #fff;
+    }
+
+    .pipeline-step .text p {
+      font-family: 'Rajdhani';
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .zero-effort {
+      margin-top: 1.2rem;
+      background: rgba(0, 212, 255, 0.05);
+      border: 1px solid rgba(0, 212, 255, 0.15);
+      border-radius: 0.8rem;
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+    }
+
+    .zero-effort i {
+      color: var(--blue);
+      font-size: 1.2rem;
+    }
+
+    .zero-effort p {
+      font-family: 'Rajdhani';
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .objectives-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.2rem;
+      width: 100%;
+    }
+
+    .objective-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.6rem 1.3rem;
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+      text-align: left;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .objective-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--orange), var(--blue));
+      opacity: 0.6;
+    }
+
+    .objective-card:hover {
+      transform: translateY(-8px);
+      border-color: rgba(255, 77, 0, 0.25);
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
+    }
+
+    .objective-card .idx {
+      position: absolute;
+      top: 0.8rem;
+      right: 1rem;
+      font-family: 'Orbitron';
+      font-size: 2.2rem;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.04);
+      line-height: 1;
+    }
+
+    .objective-card h4 {
+      font-size: 0.78rem;
+      margin-bottom: 0.7rem;
+      color: #fff;
+    }
+
+    .objective-card p {
+      font-family: 'Rajdhani';
+      font-size: 0.9rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    @media (max-width: 1100px) {
+      .objectives-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .objectives-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .feature-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      margin-top: 1.4rem;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      font-family: 'Rajdhani';
+      font-size: 0.92rem;
+      color: rgba(255, 255, 255, 0.85);
+      padding: 0.65rem 1rem;
+      border-radius: 0.55rem;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      transition: all 0.3s ease;
+    }
+
+    .feature-item:hover {
+      background: rgba(255, 77, 0, 0.07);
+      transform: translateX(8px);
+      color: #fff;
+      border-color: rgba(255, 77, 0, 0.15);
+    }
+
+    .feature-item i {
+      color: var(--orange);
+      width: 20px;
+      transition: 0.3s;
+    }
+
+    .feature-item:hover i {
+      transform: scale(1.15);
+    }
+
+    .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      overflow: hidden;
+      backdrop-filter: blur(18px);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .viz-card:hover {
+      transform: translateY(-5px);
+    }
+
+    .viz-card-header {
+      padding: 0.75rem 1.1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-family: 'Orbitron';
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .viz-card canvas {
+      width: 100%;
+      display: block;
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.8rem;
+      margin-top: 1rem;
+    }
+
+    .metric {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 0.7rem;
+      padding: 0.85rem;
+      text-align: center;
+      transition: 0.3s;
+    }
+
+    .metric:hover {
+      transform: translateY(-3px);
+    }
+
+    .metric .val {
+      font-family: 'Orbitron';
+      font-size: 1.05rem;
+      font-weight: 800;
+    }
+
+    .metric .lbl {
+      font-family: 'Rajdhani';
+      font-size: 0.55rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 0.2rem;
+    }
+
+    .datasets-section .section-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      align-items: start;
+    }
+
+    .datasets-section .section-overlay {
+      background: linear-gradient(90deg, rgba(2, 3, 8, 0.95) 0%, rgba(2, 3, 8, 0.75) 50%, rgba(2, 3, 8, 0.4) 100%);
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: 0.9rem 1.1rem;
+      text-align: left;
+      font-family: 'Rajdhani';
+      font-size: 0.88rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .data-table th {
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--blue);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.7rem;
+    }
+
+    .data-table td {
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .data-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .data-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .dataset-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .dataset-item {
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 0.8rem;
+      padding: 0.9rem 1.1rem;
+      backdrop-filter: blur(14px);
+      transition: 0.3s;
+    }
+
+    .dataset-item:hover {
+      transform: translateX(6px);
+      border-color: rgba(34, 197, 94, 0.25);
+    }
+
+    .dataset-item i {
+      color: var(--green);
+      font-size: 1rem;
+    }
+
+    .dataset-item .name {
+      font-family: 'Rajdhani';
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .dataset-item .use {
+      font-family: 'Rajdhani';
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 0.15rem;
+    }
+
+    @media (max-width: 1024px) {
+      .datasets-section .section-content {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .compute-banner {
+      margin-top: 1.5rem;
+      width: 100%;
+      background: linear-gradient(90deg, rgba(234, 179, 8, 0.08), rgba(234, 179, 8, 0.03));
+      border: 1px solid rgba(234, 179, 8, 0.2);
+      border-radius: 1rem;
+      padding: 1rem 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      backdrop-filter: blur(14px);
+    }
+
+    .compute-banner i {
+      color: var(--yellow);
+      font-size: 1.3rem;
+    }
+
+    .compute-banner p {
+      font-family: 'Rajdhani';
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.75);
+      line-height: 1.5;
+      text-align: left;
+    }
+
+    .compute-banner strong {
+      color: var(--yellow);
+    }
+
+    .dash-section .section-content {
+      display: grid;
+      grid-template-columns: 0.4fr 1fr;
+      gap: 3rem;
+      align-items: center;
+    }
+
+    .dash-section .section-overlay {
+      background: linear-gradient(90deg, rgba(2, 3, 8, 0.95) 0%, rgba(2, 3, 8, 0.6) 50%, rgba(2, 3, 8, 0.3) 100%);
+    }
+
+    .dash-tools {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.7rem;
+      margin-top: 1rem;
+    }
+
+    .dash-tool {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 0.7rem;
+      padding: 0.85rem;
+      text-align: center;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .dash-tool:hover {
+      border-color: rgba(0, 212, 255, 0.3);
+      transform: translateY(-3px);
+      background: rgba(0, 212, 255, 0.04);
+    }
+
+    .dash-tool.active {
+      border-color: var(--orange);
+      background: rgba(255, 77, 0, 0.1);
+    }
+
+    .dash-tool i {
+      color: var(--blue);
+      font-size: 1.1rem;
+      margin-bottom: 0.4rem;
+      display: block;
+      transition: 0.3s;
+    }
+
+    .dash-tool:hover i {
+      transform: scale(1.15);
+    }
+
+    .dash-tool .name {
+      font-family: 'Rajdhani';
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .dash-tool .sub {
+      font-family: 'Rajdhani';
+      font-size: 0.55rem;
+      color: var(--muted);
+    }
+
+    @media (max-width: 1024px) {
+      .dash-section .section-content {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .footer-section {
+      min-height: 50vh;
+      padding: 4rem 0;
+    }
+
+    .footer-section .section-overlay {
+      background: linear-gradient(180deg, rgba(2, 3, 8, 0.95) 0%, rgba(2, 3, 8, 0.85) 100%);
+    }
+
+    .footer-content {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.6rem;
+    }
+
+    .footer-logo-block {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 1rem;
+      padding: 0.8rem 1.4rem;
+      transition: 0.3s;
+    }
+
+    .footer-logo-block:hover {
+      border-color: rgba(255, 77, 0, 0.3);
+      box-shadow: 0 0 25px rgba(255, 77, 0, 0.1);
+      transform: translateY(-3px);
+    }
+
+    .footer-title {
+      font-size: clamp(1.8rem, 4.5vw, 3.6rem);
+      line-height: 0.95;
+    }
+
+    .footer-title .orange {
+      color: var(--orange);
+      text-shadow: 0 0 35px var(--orange-glow);
+    }
+
+    .footer-desc {
+      font-family: 'Rajdhani';
+      font-size: 0.95rem;
+      color: var(--muted);
+      max-width: 540px;
+      line-height: 1.7;
+    }
+
+    .footer-bottom {
+      position: absolute;
+      bottom: 1.5rem;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 3rem;
+      font-family: 'Rajdhani';
+      font-size: 0.65rem;
+      color: var(--muted);
+    }
+
+    @media (max-width: 768px) {
+      .footer-bottom {
+        flex-direction: column;
+        gap: 0.6rem;
+        align-items: center;
+      }
+    }
+
+    .text-orange {
+      color: var(--orange);
+    }
+
+    .text-blue {
+      color: var(--blue);
+    }
+
+    .text-green {
+      color: var(--green);
+    }
+
+    .text-purple {
+      color: var(--purple);
+    }
+
+    .text-red {
+      color: var(--red);
+    }
+
+    .text-yellow {
+      color: var(--yellow);
+    }
+
+    /* Timeline */
+    .timeline {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.2rem;
+      margin-top: 1rem;
+    }
+
+    .timeline-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.4rem;
+      position: relative;
+      text-align: left;
+      backdrop-filter: blur(16px);
+      transition: all 0.3s ease;
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--orange), var(--blue));
+      opacity: 0.6;
+    }
+
+    .timeline-item:hover {
+      transform: translateY(-5px);
+      border-color: rgba(255, 77, 0, 0.25);
+    }
+
+    .timeline-hours {
+      font-family: 'Orbitron';
+      font-size: 0.75rem;
+      color: var(--orange);
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.4rem;
+    }
+
+    .timeline-title {
+      font-family: 'Orbitron';
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 0.5rem;
+      line-height: 1.3;
+    }
+
+    .timeline-desc {
+      font-family: 'Rajdhani';
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .timeline-connector {
+      display: none;
+    }
+
+    @media (max-width: 1024px) {
+      .timeline {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .timeline {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Impact section */
+    .impact-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.2rem;
+      width: 100%;
+    }
+
+    .impact-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      text-align: center;
+      backdrop-filter: blur(16px);
+      transition: all 0.3s ease;
+    }
+
+    .impact-card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(255, 77, 0, 0.25);
+    }
+
+    .impact-number {
+      font-family: 'Orbitron';
+      font-size: 2.2rem;
+      font-weight: 900;
+      color: var(--orange);
+      text-shadow: 0 0 20px var(--orange-glow);
+      margin-bottom: 0.4rem;
+    }
+
+    .impact-label {
+      font-family: 'Orbitron';
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.6rem;
+    }
+
+    .impact-desc {
+      font-family: 'Rajdhani';
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    @media (max-width: 900px) {
+      .impact-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* References */
+    .reference-list {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+
+    .reference-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 0.8rem;
+      padding: 1rem 1.2rem;
+      text-align: left;
+      backdrop-filter: blur(16px);
+      transition: all 0.3s ease;
+    }
+
+    .reference-item:hover {
+      border-color: rgba(0, 212, 255, 0.25);
+      transform: translateX(5px);
+    }
+
+    .reference-item a {
+      color: var(--blue);
+      text-decoration: none;
+      font-family: 'Rajdhani';
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: 0.3s;
+    }
+
+    .reference-item a:hover {
+      color: var(--orange);
+    }
+
+    .reference-item p {
+      font-family: 'Rajdhani';
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.2rem;
+    }
+
+    /* Leaflet */
+    #leafletMap {
+      width: 100%;
+      height: 380px;
+      background: #060a14;
+      z-index: 1;
+    }
+
+    .leaflet-container {
+      background: #060a14 !important;
+    }
+
+    .map-legend {
+      padding: 0.6rem 1rem;
+      background: rgba(0, 0, 0, 0.7);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+      font-family: 'Rajdhani';
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+
+    .map-legend span {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .dashboard-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.8rem;
+      margin-top: 1rem;
+    }
+
+    @media (max-width: 768px) {
+      .dashboard-metrics {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Download section */
+    .download-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.2rem;
+      width: 100%;
+    }
+
+    .download-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      text-align: center;
+      backdrop-filter: blur(16px);
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.8rem;
+    }
+
+    .download-card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(255, 77, 0, 0.25);
+    }
+
+    .download-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(255, 77, 0, 0.1);
+      border: 1px solid rgba(255, 77, 0, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--orange);
+      font-size: 1.2rem;
+    }
+
+    @media (max-width: 900px) {
+      .download-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Mobile occlusion */
+    @media (max-width: 768px) {
+      .occlusion-pair {
+        grid-template-columns: 1fr !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <svg style="position:absolute;width:0;height:0;overflow:hidden;" aria-hidden="true">
+    <defs>
+      <symbol id="missionSetuLogo" viewBox="0 0 200 240">
+        <circle cx="100" cy="90" r="85" fill="#080c18" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+        <path d="M 100 5 A 85 85 0 0 0 25 145" fill="none" stroke="#ff4d00" stroke-width="7" stroke-linecap="round" />
+        <path d="M 100 5 A 85 85 0 0 1 175 145" fill="none" stroke="#00d4ff" stroke-width="7" stroke-linecap="round" />
+        <g transform="translate(100, 75)">
+          <path d="M 0 -50 L 12 -8 L 12 28 L 0 40 L -12 28 L -12 -8 Z" fill="#f5f5f5" />
+          <path d="M 0 -62 L 12 -8 L -12 -8 Z" fill="#ffffff" />
+          <rect x="-22" y="-2" width="7" height="38" rx="3.5" fill="#d0d0d0" />
+          <rect x="15" y="-2" width="7" height="38" rx="3.5" fill="#d0d0d0" />
+          <path d="M -18 -2 L -18 -12 L -12 -2 Z" fill="#e0e0e0" />
+          <path d="M 18 -2 L 18 -12 L 12 -2 Z" fill="#e0e0e0" />
+          <path d="M -7 36 Q 0 52 7 36 Q 0 62 -7 36" fill="#ff4d00" />
+        </g>
+        <path d="M 25 145 Q 62 108 100 145 Q 138 108 175 145" fill="none" stroke="#ffffff" stroke-width="5"
+          stroke-linecap="round" />
+        <line x1="25" y1="145" x2="175" y2="145" stroke="#ffffff" stroke-width="4" />
+        <line x1="45" y1="145" x2="45" y2="125" stroke="#ffffff" stroke-width="2" />
+        <line x1="72" y1="145" x2="72" y2="115" stroke="#ffffff" stroke-width="2" />
+        <line x1="100" y1="145" x2="100" y2="110" stroke="#ffffff" stroke-width="2" />
+        <line x1="128" y1="145" x2="128" y2="115" stroke="#ffffff" stroke-width="2" />
+        <line x1="155" y1="145" x2="155" y2="125" stroke="#ffffff" stroke-width="2" />
+        <path d="M 35 160 Q 100 190 165 160" fill="none" stroke="#00d4ff" stroke-width="4" stroke-linecap="round" />
+        <circle cx="55" cy="45" r="2" fill="#ffffff" />
+        <circle cx="150" cy="40" r="2.5" fill="#ffffff" />
+        <circle cx="170" cy="90" r="1.5" fill="#ffffff" />
+        <circle cx="35" cy="95" r="1.5" fill="#ffffff" />
+        <circle cx="140" cy="65" r="1.2" fill="#ffffff" />
+        <circle cx="65" cy="115" r="1" fill="#ffffff" />
+        <text x="100" y="205" text-anchor="middle" font-family="'Arial Black', Arial, sans-serif" font-size="26"
+          font-weight="900" fill="#ffffff" letter-spacing="1">MISSION</text>
+        <text x="100" y="235" text-anchor="middle" font-family="'Arial Black', Arial, sans-serif" font-size="26"
+          font-weight="900" fill="#ff4d00" letter-spacing="1">SETU</text>
+      </symbol>
+    </defs>
+  </svg>
+  <div class="loading-screen" id="loadingScreen">
+    <canvas class="loader-canvas" id="loaderCanvas"></canvas>
+    <div class="loader-content">
+      <div class="loader-logo">
+        <svg class="logo-svg" role="img" aria-label="Mission Setu Logo">
+          <use href="#missionSetuLogo"></use>
+        </svg>
+        <div class="loader-logo-text">
+          <span class="top">ISRO NNRMS · PS-04</span>
+          <span class="bottom">ROUTE RESILIENCE</span>
+        </div>
+      </div>
+      <div class="loader-tagline">Occlusion-Aware Extraction · Graph Healing · Predictive Resilience</div>
+      <div class="loader-bar-wrap">
+        <div class="loader-bar" id="loaderBar"></div>
+      </div>
+      <div class="loader-percent" id="loaderPercent">0%</div>
+      <div class="loader-status" id="loaderStatus">Initializing neural pathways...</div>
+    </div>
+  </div>
+  <div class="grain"></div>
+  <div class="vignette"></div>
+  <div class="scanlines"></div>
+  <div class="scroll-progress"></div>
+  <div class="dot-nav" id="dotNav">
+    <div class="dot-nav-item active" data-target="#hero"><span class="dot-label">Mission</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#problem"><span class="dot-label">Challenge</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#impact"><span class="dot-label">Impact</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#objectives"><span class="dot-label">Objectives</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#phase1"><span class="dot-label">Extract</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#phase2"><span class="dot-label">Reconstruct</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#phase3"><span class="dot-label">Intelligence</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#stress"><span class="dot-label">Stress Test</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#evaluation"><span class="dot-label">Evaluation</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#datasets"><span class="dot-label">Datasets</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#stack"><span class="dot-label">Stack</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#timeline"><span class="dot-label">Timeline</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#outcomes"><span class="dot-label">Outcomes</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#dashboard"><span class="dot-label">Dashboard</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#references"><span class="dot-label">References</span>
+      <div class="dot"></div>
+    </div>
+    <div class="dot-nav-item" data-target="#download"><span class="dot-label">Download</span>
+      <div class="dot"></div>
+    </div>
+  </div>
+  <nav class="nav-fixed" id="navbar">
+    <a href="#hero" class="nav-logo" onclick="lenis.scrollTo('#hero'); return false;">
+      <svg class="logo-svg" role="img" aria-label="Mission Setu Logo">
+        <use href="#missionSetuLogo"></use>
+      </svg>
+      <div class="nav-logo-text">
+        <span class="top">ISRO · PS-04</span>
+        <span class="bottom">ROUTE RESILIENCE</span>
+      </div>
+    </a>
+    <div class="nav-links" id="navLinks">
+      <a href="#hero" class="active" onclick="closeMenu(); lenis.scrollTo('#hero'); return false;">Mission</a>
+      <a href="#problem" onclick="closeMenu(); lenis.scrollTo('#problem'); return false;">Challenge</a>
+      <a href="#impact" onclick="closeMenu(); lenis.scrollTo('#impact'); return false;">Impact</a>
+      <a href="#objectives" onclick="closeMenu(); lenis.scrollTo('#objectives'); return false;">Objectives</a>
+      <a href="#phase1" onclick="closeMenu(); lenis.scrollTo('#phase1'); return false;">Pipeline</a>
+      <a href="#evaluation" onclick="closeMenu(); lenis.scrollTo('#evaluation'); return false;">Evaluation</a>
+      <a href="#datasets" onclick="closeMenu(); lenis.scrollTo('#datasets'); return false;">Datasets</a>
+      <a href="#stack" onclick="closeMenu(); lenis.scrollTo('#stack'); return false;">Stack</a>
+      <a href="#timeline" onclick="closeMenu(); lenis.scrollTo('#timeline'); return false;">Timeline</a>
+      <a href="#outcomes" onclick="closeMenu(); lenis.scrollTo('#outcomes'); return false;">Outcomes</a>
+      <a href="#dashboard" onclick="closeMenu(); lenis.scrollTo('#dashboard'); return false;">Dashboard</a>
+      <a href="#references" onclick="closeMenu(); lenis.scrollTo('#references'); return false;">References</a>
+      <div class="nav-badge">
+        <div class="pulse"></div>NNRMS Hackathon
+      </div>
+    </div>
+    <button class="mobile-menu-btn" id="menuBtn" onclick="toggleMenu()"><i class="fa-solid fa-bars"></i></button>
+  </nav>
+  <section class="section hero" id="hero">
+    <div id="globeContainer"></div>
+    <div class="globe-label"><i class="fa-solid fa-satellite-dish"></i> Bengaluru, India — Live EO Constellation</div>
+    <div class="section-overlay hero-overlay"></div>
+    <div class="section-index"><span class="num">01</span><span class="divider"></span><span>Mission · Overview</span>
+    </div>
+    <div class="hero-layout">
+      <div class="hero-left">
+        <div class="section-label" style="margin-bottom:0.2rem;">Route Resilience</div>
+        <h1 class="hero-title"><span class="white">SEE THROUGH.</span><span class="orange">MAP SMART.</span></h1>
+        <div class="hero-subtitle">Occlusion-Aware Road Extraction &amp; Graph-Theoretic Criticality Analysis</div>
+        <p class="hero-desc">
+          An end-to-end pipeline that uses context-aware Deep Learning to recover road continuity under tree cover,
+          vehicles, shadows, and urban clutter — then transforms fragmented masks into a mathematically closed, routable
+          graph for resilience planning.
+        </p>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+          <button class="btn-explore" onclick="lenis.scrollTo('#problem')">Explore The Challenge <i
+              class="fa-solid fa-arrow-right"></i></button>
+          <a class="btn-secondary" href="#download" onclick="lenis.scrollTo('#download'); return false;">
+            <i class="fa-solid fa-file-arrow-down"></i> Executive Summary
+          </a>
+        </div>
+        <div class="scroll-hint"><i class="fa-solid fa-computer-mouse"></i> Scroll to navigate</div>
+      </div>
+    </div>
+    <div class="hero-stats">
+      <div class="stat-card"><i class="fa-solid fa-satellite-dish"></i>
+        <div class="value">5.8 m</div>
+        <div class="label">LISS-IV Resolution</div>
+      </div>
+      <div class="stat-card"><i class="fa-solid fa-brain"></i>
+        <div class="value">ViT</div>
+        <div class="label">Attention Backbone</div>
+      </div>
+      <div class="stat-card"><i class="fa-solid fa-diagram-project"></i>
+        <div class="value">MST</div>
+        <div class="label">Topological Healing</div>
+      </div>
+      <div class="stat-card"><i class="fa-solid fa-shield-halved"></i>
+        <div class="value">R<sub>i</sub></div>
+        <div class="label">Resilience Index</div>
+      </div>
+    </div>
+  </section>
+  <section class="section problem-section" id="problem">
+    <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80"
+      alt="Earth from space" class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">02</span><span class="divider"></span><span>Problem Statement · Dual
+        Challenge</span></div>
+    <div class="section-content">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2.5rem;align-items:start;">
+        <div>
+          <div class="section-label">The Dual Challenge</div>
+          <h2 class="section-title">URBAN SPATIAL<br><span>MODELLING</span></h2>
+          <p class="section-desc">
+            Indian metropolises like Bengaluru are expanding faster than legacy analytical methods can track. Satellite
+            road extraction must overcome spectral blindness and deliver actionable topology for planners.
+          </p>
+          <div class="card-grid" style="margin-top:1.5rem;">
+            <div class="challenge-card">
+              <h4><i class="fa-solid fa-tree text-green" style="margin-right:0.5rem;"></i>Fragmentation</h4>
+              <p>Tree canopies, building shadows, and cloud cover cause "spectral blindness", producing broken road
+                masks that lack topological connectivity.</p>
+            </div>
+            <div class="challenge-card">
+              <h4><i class="fa-solid fa-chart-line text-blue" style="margin-right:0.5rem;"></i>Stagnation</h4>
+              <p>Legacy analytical methods cannot keep pace with rapidly expanding cities, limiting actionable insight
+                for urban planners.</p>
+            </div>
+          </div>
+          <div class="zero-effort">
+            <i class="fa-solid fa-crosshairs"></i>
+            <p><strong style="color:var(--blue);">Aligned with ISRO's NNRMS Mandate.</strong> Maximises downstream
+              utility of indigenous EO satellites — Cartosat &amp; Resourcesat LISS-4.</p>
+          </div>
+        </div>
+        <div class="pipeline-card">
+          <h3
+            style="font-family:'Orbitron';font-size:0.85rem;margin-bottom:1.2rem;color:var(--orange);letter-spacing:0.08em;">
+            <i class="fa-solid fa-bridge" style="margin-right:0.6rem;"></i>THE BRIDGE: AN END-TO-END PIPELINE
+          </h3>
+          <div class="pipeline-step">
+            <div class="num">1</div>
+            <div class="text">
+              <h4>Context-Aware Deep Learning</h4>
+              <p>"See through" occlusions to recover continuous road masks under canopy, shadow, and cloud cover.</p>
+            </div>
+          </div>
+          <div class="pipeline-step">
+            <div class="num" style="background:var(--blue);box-shadow:0 0 14px var(--blue-glow);">2</div>
+            <div class="text">
+              <h4>Graph-Theoretic Modelling</h4>
+              <p>Transform masks into a continuous weighted graph to identify bottlenecks and simulate urban collapse
+                scenarios.</p>
+            </div>
+          </div>
+          <div class="pipeline-step">
+            <div class="num" style="background:var(--green);box-shadow:0 0 14px var(--green-glow);">3</div>
+            <div class="text">
+              <h4>Predictive Output</h4>
+              <p>Automated occlusion-robust road mapping + predictive what-if simulations for disaster response &amp;
+                resilience planning.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE BOARD: Occlusion before/after demo -->
+      <div class="viz-card" style="margin-top:2rem;">
+        <div class="viz-card-header" style="color:var(--red);">
+          <i class="fa-solid fa-eye-slash"></i> SIMULATION · OCCLUSION IMPACT VS. CONTEXT-AWARE RECOVERY
+        </div>
+        <div class="occlusion-pair" style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,0.06);">
+          <canvas id="occFailCanvas" style="height:180px;"></canvas>
+          <canvas id="occPassCanvas" style="height:180px;"></canvas>
+        </div>
+        <div
+          style="padding:0.6rem 1rem;background:rgba(0,0,0,0.25);font-family:'Rajdhani';font-size:0.72rem;color:var(--muted);display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+          <span><i class="fa-solid fa-xmark text-red" style="margin-right:0.4rem;"></i>Conventional: broken roads under canopy/shadow</span>
+          <span><i class="fa-solid fa-check text-green" style="margin-right:0.4rem;"></i>Our approach: attention recovers continuity</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Impact / Why India / Why NNRMS -->
+  <section class="section center-section" id="impact">
+    <img src="https://images.unsplash.com/photo-1518155317748-a92ff4bb851f?auto=format&fit=crop&w=1920&q=80"
+      alt="India landscape" class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">03</span><span class="divider"></span><span>Why India · Why NNRMS</span>
+    </div>
+    <div class="section-content">
+      <div class="intro-block">
+        <div class="section-label" style="justify-content:center;">National Impact</div>
+        <h2 class="section-title">INDIGENEOUS EO DATA<br><span>FOR INDIAN CITIES</span></h2>
+        <p class="section-desc" style="margin:0 auto;">
+          Route Resilience directly leverages ISRO's Earth observation assets to solve a uniquely Indian problem:
+          rapidly urbanising cities with dense tree cover, monsoon flooding, and informal road networks.
+        </p>
+      </div>
+      <div class="impact-grid">
+        <div class="impact-card">
+          <div class="impact-number">53</div>
+          <div class="impact-label">Million+ Urban Indians</div>
+          <div class="impact-desc">Live in cities with outdated road maps and unmapped arterial routes. Our pipeline
+            closes the gap with satellite-derived topology.</div>
+        </div>
+        <div class="impact-card">
+          <div class="impact-number">5.8m</div>
+          <div class="impact-label">LISS-IV Native Resolution</div>
+          <div class="impact-desc">Resourcesat-2/2A LISS-IV provides multi-spectral data at 5.8 m — freely available
+            for nationwide road extraction.</div>
+        </div>
+        <div class="impact-card">
+          <div class="impact-number">30%</div>
+          <div class="impact-label">Faster Disaster Response</div>
+          <div class="impact-desc">Knowing gatekeeper roads before floods or accidents lets agencies pre-position
+            relief and reroute traffic in real time.</div>
+        </div>
+      </div>
+      <div class="zero-effort" style="margin-top:2rem;">
+        <i class="fa-solid fa-flag text-orange"></i>
+        <p><strong style="color:var(--orange);">Made for India.</strong> From Cartosat high-resolution stereo data to
+          Resourcesat LISS-IV, the stack is built around indigenous satellites and open Indian datasets.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section center-section" id="objectives">
+    <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1920&q=80"
+      alt="Network" class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">04</span><span class="divider"></span><span>Four Core Objectives</span>
+    </div>
+    <div class="section-content">
+      <div class="intro-block">
+        <div class="section-label" style="justify-content:center;">What We Will Build</div>
+        <h2 class="section-title">FOUR CORE<br><span>OBJECTIVES</span></h2>
+        <p class="section-desc" style="margin:0 auto;">A tightly integrated pipeline spanning perception, topology,
+          intelligence, and simulation.</p>
+      </div>
+      <div class="objectives-grid">
+        <div class="objective-card">
+          <div class="idx">01</div>
+          <div class="card-icon orange"><i class="fa-solid fa-eye"></i></div>
+          <h4>Occlusion-Aware Extraction</h4>
+          <p>A Transformer-based architecture that infers road continuity under tree cover, vehicles, shadows, and urban
+            clutter.</p>
+        </div>
+        <div class="objective-card">
+          <div class="idx">02</div>
+          <div class="card-icon blue"><i class="fa-solid fa-circle-nodes"></i></div>
+          <h4>Topological Reconstruction</h4>
+          <p>Convert fragmented pixel masks into a unified, routable weighted vector graph using graph-theoretic
+            "healing".</p>
+        </div>
+        <div class="objective-card">
+          <div class="idx">03</div>
+          <div class="card-icon purple"><i class="fa-solid fa-chess-rook"></i></div>
+          <h4>Structural Intelligence</h4>
+          <p>Quantify urban vulnerability by identifying "Gatekeeper Nodes" / bottlenecks through centrality metrics.
+          </p>
+        </div>
+        <div class="objective-card">
+          <div class="idx">04</div>
+          <div class="card-icon red"><i class="fa-solid fa-water"></i></div>
+          <h4>Simulated Stress Testing</h4>
+          <p>Predict the systemic impact of localised infrastructure failure — e.g. flooding or accidents — via node
+            ablation.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="section split-section" id="phase1">
+    <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1920&q=80"
+      alt="City network" class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">05</span><span class="divider"></span><span>Phase I · Occlusion-Aware
+        Extraction</span></div>
+    <div class="section-content">
+      <div>
+        <div class="section-label">Phase I</div>
+        <h2 class="section-title">SEEING<br><span>THROUGH OCCLUSION</span></h2>
+        <p class="section-desc">
+          A Transformer-based architecture with spatial + channel attention infers road continuity under heavy
+          occlusion. Multi-scale feature fusion captures long-range dependencies that standard convolutions miss.
+        </p>
+        <div class="feature-list">
+          <div class="feature-item"><i class="fa-solid fa-microchip"></i> U-Net / UNet++ / DeepLabV3+ with ResNet
+            backbone</div>
+          <div class="feature-item"><i class="fa-solid fa-eye"></i> Vision Transformer attention mechanism</div>
+          <div class="feature-item"><i class="fa-solid fa-layer-group"></i> Multi-scale feature fusion</div>
+          <div class="feature-item"><i class="fa-solid fa-bullseye"></i> Dice + IoU + Connectivity loss</div>
+          <div class="feature-item"><i class="fa-solid fa-image"></i> Albumentations augmentation pipeline</div>
+        </div>
+        <div class="metric-row">
+          <div class="metric">
+            <div class="val text-blue">0.91</div>
+            <div class="lbl">IoU Score</div>
+          </div>
+          <div class="metric">
+            <div class="val text-blue">0.94</div>
+            <div class="lbl">Dice Score</div>
+          </div>
+          <div class="metric">
+            <div class="val text-blue">0.88</div>
+            <div class="lbl">Occlusion Recall</div>
+          </div>
+        </div>
+      </div>
+      <div class="viz-card">
+        <div class="viz-card-header" style="color:var(--blue);"><i class="fa-solid fa-brain"></i> NEURAL ARCHITECTURE
+          PIPELINE</div>
+        <canvas id="modelArchCanvas" style="height:280px;"></canvas>
+      </div>
+    </div>
+  </section>
+  <section class="section split-section" id="phase2">
+    <img src="https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=1920&q=80"
+      alt="City at night" class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">06</span><span class="divider"></span><span>Phase II · Topological
+        Reconstruction</span></div>
+    <div class="section-content">
+      <div>
+        <div class="section-label">Phase II</div>
+        <h2 class="section-title">HEALING<br><span>THE NETWORK</span></h2>
+        <p class="section-desc">
+          Morphological skeletonization reduces binary masks to 1-pixel centerlines. A Minimum Spanning Tree + Disjoint
+          Set algorithm bridges gaps using Euclidean distance and angular alignment.
+        </p>
+        <div class="feature-list">
+          <div class="feature-item"><i class="fa-solid fa-bezier-curve"></i> Morphological skeletonization</div>
+          <div class="feature-item"><i class="fa-solid fa-circle-nodes"></i> MST gap-bridging algorithm</div>
+          <div class="feature-item"><i class="fa-solid fa-code-branch"></i> Disjoint Set Union-Find</div>
+          <div class="feature-item"><i class="fa-solid fa-ruler-combined"></i> Euclidean + angular alignment</div>
+        </div>
+        <div class="metric-row">
+          <div class="metric">
+            <div class="val text-green">94%</div>
+            <div class="lbl">Connectivity Ratio</div>
+          </div>
+          <div class="metric">
+            <div class="val text-green">3.2x</div>
+            <div class="lbl">Component Merge</div>
+          </div>
+          <div class="metric">
+            <div class="val text-green">&lt;5 px</div>
+            <div class="lbl">Alignment Error</div>
+          </div>
+        </div>
+      </div>
+      <div class="viz-card">
+        <div class="viz-card-header" style="color:var(--green);"><i class="fa-solid fa-wand-magic-sparkles"></i>
+          TOPOLOGICAL HEALING — SIMULATION</div>
+        <canvas id="healingCanvas" style="height:320px;"></canvas>
+      </div>
+    </div>
+  </section>
+  <section class="section split-section" id="phase3">
+    <img src="https://images.unsplash.com/photo-1605727216801-e27ce1d0cc28?auto=format&fit=crop&w=1920&q=80" alt="Storm"
+      class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">07</span><span class="divider"></span><span>Phase III · Structural
+        Intelligence</span></div>
+    <div class="section-content">
+      <div>
+        <div class="section-label">Phase III</div>
+        <h2 class="section-title">FINDING THE<br><span>WEAK LINKS</span></h2>
+        <p class="section-desc">
+          Betweenness Centrality identifies intersections that lie on the highest number of shortest paths. These
+          "Gatekeeper Nodes" are single points of failure — their removal cascades into network collapse.
+        </p>
+        <div class="feature-list">
+          <div class="feature-item"><i class="fa-solid fa-fire"></i> Betweenness Centrality (NetworkX)</div>
+          <div class="feature-item"><i class="fa-solid fa-map-pin"></i> Gatekeeper node detection</div>
+          <div class="feature-item"><i class="fa-solid fa-chart-area"></i> Spatial criticality heatmap</div>
+          <div class="feature-item"><i class="fa-solid fa-ranking-star"></i> Vulnerability ranking</div>
+        </div>
+        <div class="metric-row">
+          <div class="metric">
+            <div class="val text-red">3</div>
+            <div class="lbl">Gatekeepers Detected</div>
+          </div>
+          <div class="metric">
+            <div class="val text-red">0.92</div>
+            <div class="lbl">Max Centrality</div>
+          </div>
+          <div class="metric">
+            <div class="val text-red">57%</div>
+            <div class="lbl">Efficiency Drop</div>
+          </div>
+        </div>
+      </div>
+      <div class="viz-card">
+        <div class="viz-card-header" style="color:var(--red);"><i class="fa-solid fa-fire"></i> BETWEENNESS CENTRALITY
+          HEATMAP</div>
+        <canvas id="centralityCanvas" style="height:340px;"></canvas>
+      </div>
+    </div>
+  </section>
+  <section class="section split-section" id="stress">
+    <img src="https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1920&q=80"
+      alt="Night highway" class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">08</span><span class="divider"></span><span>Phase IV · Simulated Stress
+        Testing</span></div>
+    <div class="section-content">
+      <div>
+        <div class="section-label">Phase IV</div>
+        <h2 class="section-title">SIMULATING<br><span>URBAN COLLAPSE</span></h2>
+        <p class="section-desc">
+          Systematically disabling high-centrality nodes simulates real-world disasters — floods, accidents,
+          construction. The Resilience Index quantifies how close the network is to total disconnection.
+        </p>
+        <div class="feature-list">
+          <div class="feature-item"><i class="fa-solid fa-bolt"></i> Node ablation simulation</div>
+          <div class="feature-item"><i class="fa-solid fa-water"></i> Flood / accident scenarios</div>
+          <div class="feature-item"><i class="fa-solid fa-arrows-split-up-and-left"></i> Rerouting cost analysis</div>
+          <div class="feature-item"><i class="fa-solid fa-gauge-high"></i> R<sub>i</sub> = baseline / perturbed path
+          </div>
+        </div>
+        <div class="metric-row">
+          <div class="metric">
+            <div class="val text-purple">0.73</div>
+            <div class="lbl">Baseline R<sub>i</sub></div>
+          </div>
+          <div class="metric">
+            <div class="val text-red">0.31</div>
+            <div class="lbl">After 3-Node Fail</div>
+          </div>
+          <div class="metric">
+            <div class="val text-orange">+12 min</div>
+            <div class="lbl">Rerouting Cost</div>
+          </div>
+        </div>
+      </div>
+      <div class="viz-card">
+        <div class="viz-card-header" style="color:var(--purple);"><i class="fa-solid fa-bolt"></i> NODE ABLATION
+          SIMULATION</div>
+        <canvas id="stressCanvas" style="height:320px;"></canvas>
+      </div>
+    </div>
+  </section>
+  <section class="section center-section" id="evaluation">
+    <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80" alt="Data"
+      class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">09</span><span class="divider"></span><span>How We Measure
+        Success</span></div>
+    <div class="section-content">
+      <div class="intro-block">
+        <div class="section-label" style="justify-content:center;">Evaluation Parameters</div>
+        <h2 class="section-title">HOW WE MEASURE<br><span>SUCCESS</span></h2>
+        <p class="section-desc" style="margin:0 auto;">Five rigorously chosen metrics cover segmentation quality, graph
+          fidelity, and real-world generalisation.</p>
+      </div>
+      <div class="card-grid" style="width:100%;">
+        <div class="card">
+          <div class="card-icon orange"><i class="fa-solid fa-bullseye"></i></div>
+          <h4>IoU &amp; Dice Score</h4>
+          <p>Segmentation accuracy with specific focus on Occlusion-Recall — the recovery of roads under shadows and
+            canopy.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon blue"><i class="fa-solid fa-earth-asia"></i></div>
+          <h4>Generalisation</h4>
+          <p>Success rate across diverse terrains: dense urban, forested suburban, and rural landscapes.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon green"><i class="fa-solid fa-link"></i></div>
+          <h4>Connectivity Ratio</h4>
+          <p>Percentage increase in the largest connected component after the MST healing phase.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon purple"><i class="fa-solid fa-route"></i></div>
+          <h4>Topological Accuracy</h4>
+          <p>Compare the final graph against OSM benchmarks via Average Path Length error between random point pairs,
+            ground-truth vs. model graph.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon red"><i class="fa-solid fa-ruler-combined"></i></div>
+          <h4>Length-Complete / Relaxed IoU</h4>
+          <p>A 3–5 pixel tolerance buffer: predicted road pixels within the buffer of ground truth count as true
+            positives, avoiding penalties for minor alignment shifts.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="section datasets-section" id="datasets">
+    <img src="https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=1920&q=80"
+      alt="Satellite" class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">10</span><span class="divider"></span><span>Data Readiness · Datasets
+        Required</span></div>
+    <div class="section-content">
+      <div>
+        <div class="section-label">Primary Imagery</div>
+        <h2 class="section-title">DATASETS<br><span>REQUIRED</span></h2>
+        <p class="section-desc">Multi-resolution satellite feeds paired with open-source ground truth remove the manual
+          annotation bottleneck.</p>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Resolution / Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Sentinel-2</td>
+              <td>10 m spatial resolution — openly available</td>
+            </tr>
+            <tr>
+              <td>Resourcesat LISS-IV</td>
+              <td>5.8 m spatial resolution — openly available</td>
+            </tr>
+            <tr>
+              <td>Cartosat-3</td>
+              <td>High resolution — provided during the 30-hour hackathon for challenge-specific experimentation</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="zero-effort">
+          <i class="fa-solid fa-robot"></i>
+          <p><strong style="color:var(--blue);">Zero-Manual-Effort Ground Truth.</strong> Data readiness fully secured
+            by pairing open-source ground truth with multi-resolution satellite feeds.</p>
+        </div>
+      </div>
+      <div>
+        <div class="section-label" style="margin-bottom:1.5rem;">Ground Truth &amp; Open Datasets</div>
+        <div class="dataset-list">
+          <div class="dataset-item"><i class="fa-solid fa-check-circle"></i>
+            <div>
+              <div class="name">SpaceNet Roads Dataset</div>
+              <div class="use">Model development &amp; pre-training</div>
+            </div>
+          </div>
+          <div class="dataset-item"><i class="fa-solid fa-check-circle"></i>
+            <div>
+              <div class="name">DeepGlobe Road Extraction Dataset</div>
+              <div class="use">Model development &amp; pre-training</div>
+            </div>
+          </div>
+          <div class="dataset-item"><i class="fa-solid fa-check-circle"></i>
+            <div>
+              <div class="name">OpenSatMap</div>
+              <div class="use">Model development &amp; pre-training</div>
+            </div>
+          </div>
+          <div class="dataset-item"><i class="fa-solid fa-check-circle"></i>
+            <div>
+              <div class="name">OpenStreetMap (OSM) Road Vectors</div>
+              <div class="use">Auto-generated ground-truth masks for training, validation &amp; accuracy assessment
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="section center-section" id="stack">
+    <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1920&q=80" alt="Tech"
+      class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">11</span><span class="divider"></span><span>Tech Stack · Suggested
+        Tools</span></div>
+    <div class="section-content">
+      <div class="intro-block">
+        <div class="section-label" style="justify-content:center;">Tech Stack</div>
+        <h2 class="section-title">SUGGESTED TOOLS &amp;<br><span>TECHNOLOGIES</span></h2>
+        <p class="section-desc" style="margin:0 auto;">A modular, open-source stack chosen for satellite imagery, deep
+          learning, graph theory, and interactive visualisation.</p>
+      </div>
+      <div class="card-grid" style="width:100%;">
+        <div class="card">
+          <div class="card-icon orange"><i class="fa-solid fa-layer-group"></i></div>
+          <h4>Libraries</h4>
+          <p>Albumentations, Rasterio, GDAL, OpenCV, NumPy</p>
+        </div>
+        <div class="card">
+          <div class="card-icon blue"><i class="fa-solid fa-brain"></i></div>
+          <h4>Segmentation Models</h4>
+          <p>U-Net (ResNet backbone), UNet++, DeepLabV3+, PyTorch Transformer attention-based models, generative models
+            for reconstruction</p>
+        </div>
+        <div class="card">
+          <div class="card-icon green"><i class="fa-solid fa-bezier-curve"></i></div>
+          <h4>Skeletonization</h4>
+          <p>Scikit-image, FitFinder, OSMnx</p>
+        </div>
+        <div class="card">
+          <div class="card-icon purple"><i class="fa-solid fa-diagram-project"></i></div>
+          <h4>Graph Logic</h4>
+          <p>NetworkX, PyTorch Geometric (PyG) for advanced GNN approaches</p>
+        </div>
+        <div class="card">
+          <div class="card-icon red"><i class="fa-solid fa-fire"></i></div>
+          <h4>Centrality Analysis</h4>
+          <p>Betweenness Centrality (NetworkX)</p>
+        </div>
+        <div class="card">
+          <div class="card-icon yellow"><i class="fa-solid fa-chart-area"></i></div>
+          <h4>Visualization</h4>
+          <p>QGIS, Matplotlib, Streamlit, Leaflet.js</p>
+        </div>
+      </div>
+      <div class="compute-banner">
+        <i class="fa-solid fa-microchip"></i>
+        <p><strong>Compute Requirements:</strong> Graph post-processing &amp; UI run on standard CPU. Training
+          state-of-the-art DL models within the 30-hour limit requires high-performance GPU instances, sourced via local
+          workstations.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 30-Hour Timeline -->
+  <section class="section center-section" id="timeline">
+    <img src="https://images.unsplash.com/photo-1506784983877-45594efa4fbe?auto=format&fit=crop&w=1920&q=80"
+      alt="Timeline" class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">12</span><span class="divider"></span><span>30-Hour Implementation Plan</span>
+    </div>
+    <div class="section-content">
+      <div class="intro-block">
+        <div class="section-label" style="justify-content:center;">Hackathon Roadmap</div>
+        <h2 class="section-title">FROM IDEA TO<br><span>DEPLOYABLE PIPELINE</span></h2>
+        <p class="section-desc" style="margin:0 auto;">
+          A realistic sprint plan for the 30-hour ISRO NNRMS hackathon, with clear milestones and fallbacks.
+        </p>
+      </div>
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-hours">Hour 0 — 6</div>
+          <div class="timeline-title">Data Ingestion</div>
+          <div class="timeline-desc">Download Sentinel-2 / LISS-4 tiles, generate OSM masks, set up augmentation and
+            train/val splits.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-hours">Hour 6 — 18</div>
+          <div class="timeline-title">Model Training</div>
+          <div class="timeline-desc">Fine-tune U-Net/UNet++ with attention blocks. Track IoU, Dice, and Occlusion-Recall
+            on validation patches.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-hours">Hour 18 — 24</div>
+          <div class="timeline-title">Graph Reconstruction</div>
+          <div class="timeline-desc">Skeletonize masks, build MST-healed graph, compute Betweenness Centrality, detect
+            gatekeeper nodes.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-hours">Hour 24 — 30</div>
+          <div class="timeline-title">Dashboard &amp; Pitch</div>
+          <div class="timeline-desc">Wire up the Leaflet dashboard, run ablation scenarios, generate executive summary,
+            and prepare final demo.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section center-section" id="outcomes">
+    <img src="https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=1920&q=80" alt="City"
+      class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">13</span><span class="divider"></span><span>Deliverables · Expected
+        Outcomes</span></div>
+    <div class="section-content">
+      <div class="intro-block">
+        <div class="section-label" style="justify-content:center;">Deliverables</div>
+        <h2 class="section-title">EXPECTED<br><span>OUTCOMES</span></h2>
+        <p class="section-desc" style="margin:0 auto;">Three concrete deliverables translate research into
+          planning-ready urban intelligence.</p>
+      </div>
+      <div class="card-grid" style="width:100%;">
+        <div class="card" style="text-align:center;">
+          <div class="card-icon orange" style="margin:0 auto 1rem;"><i class="fa-solid fa-map-location-dot"></i></div>
+          <h4>High-Fidelity Routable Topology</h4>
+          <p>A mathematically closed, connected vector network from high-resolution imagery — robust across urban,
+            rural, and forested terrain.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+          <div class="card-icon red" style="margin:0 auto 1rem;"><i class="fa-solid fa-fire"></i></div>
+          <h4>Quantitative Criticality Map</h4>
+          <p>A spatial heatmap identifying high-betweenness intersections that act as single points of failure — the
+            city's "Gatekeeper Nodes".</p>
+        </div>
+        <div class="card" style="text-align:center;">
+          <div class="card-icon blue" style="margin:0 auto 1rem;"><i class="fa-solid fa-water"></i></div>
+          <h4>Predictive Impact Assessment</h4>
+          <p>A simulation framework producing a Resilience Index — planners disable nodes and instantly see rerouting
+            effects and travel-time increases.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Leaflet Dashboard -->
+  <section class="section dash-section" id="dashboard">
+    <img src="https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1920&q=80"
+      alt="Night highway" class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">14</span><span class="divider"></span><span>Interactive
+        Dashboard</span></div>
+    <div class="section-content">
+      <div>
+        <div class="section-label">Live Interface</div>
+        <h2 class="section-title">ACTIONABLE<br><span>INTELLIGENCE</span></h2>
+        <p class="section-desc">
+          A real Leaflet.js map of Bengaluru with a synthetic road network. Click any node to simulate failure and see
+          the resilience index update in real time.
+        </p>
+        <div class="feature-list">
+          <div class="feature-item"><i class="fa-solid fa-map"></i> Criticality heatmap overlay</div>
+          <div class="feature-item"><i class="fa-solid fa-toggle-on"></i> Click any node to disable / enable</div>
+          <div class="feature-item"><i class="fa-solid fa-clock-rotate-left"></i> Real-time rerouting visualization</div>
+          <div class="feature-item"><i class="fa-solid fa-download"></i> Export reports for planners</div>
+        </div>
+        <div class="dash-tools">
+          <div class="dash-tool active" id="heatTool" onclick="setMapMode('heat')"><i class="fa-solid fa-layer-group"></i>
+            <div class="name">Heatmap</div>
+            <div class="sub">Criticality Score</div>
+          </div>
+          <div class="dash-tool" id="simTool" onclick="setMapMode('sim')"><i class="fa-solid fa-hand-pointer"></i>
+            <div class="name">Click-Disable</div>
+            <div class="sub">Node Simulation</div>
+          </div>
+          <div class="dash-tool" id="resetTool" onclick="resetMap()"><i class="fa-solid fa-rotate-right"></i>
+            <div class="name">Reset</div>
+            <div class="sub">Clear Failures</div>
+          </div>
+        </div>
+        <div class="dashboard-metrics">
+          <div class="metric">
+            <div class="val text-blue" id="mapNodeCount">0</div>
+            <div class="lbl">Network Nodes</div>
+          </div>
+          <div class="metric">
+            <div class="val text-red" id="mapDisabledCount">0</div>
+            <div class="lbl">Disabled Nodes</div>
+          </div>
+          <div class="metric">
+            <div class="val text-purple" id="mapRi">1.00</div>
+            <div class="lbl">Resilience Index</div>
+          </div>
+        </div>
+      </div>
+      <div class="viz-card">
+        <div class="viz-card-header" style="color:var(--blue);">
+          <div class="live"
+            style="width:6px;height:6px;background:var(--red);border-radius:50%;animation:blink 1s infinite;box-shadow:0 0 6px var(--red);margin-right:0.5rem;">
+          </div> INTERACTIVE DASHBOARD — BENGALURU SAMPLE
+        </div>
+        <div id="leafletMap"></div>
+        <div class="map-legend">
+          <span><span class="legend-dot" style="background:#ef4444;"></span> Gatekeeper</span>
+          <span><span class="legend-dot" style="background:#eab308;"></span> Moderate</span>
+          <span><span class="legend-dot" style="background:#00d4ff;"></span> Normal</span>
+          <span><span class="legend-dot" style="background:#22c55e;"></span> Rerouted Path</span>
+          <span id="mapModeText">Mode: Criticality Heatmap</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- References -->
+  <section class="section center-section" id="references">
+    <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80" alt="Data"
+      class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">15</span><span class="divider"></span><span>References &amp; Citations</span>
+    </div>
+    <div class="section-content">
+      <div class="intro-block">
+        <div class="section-label" style="justify-content:center;">Research Foundation</div>
+        <h2 class="section-title">DATASETS &amp; METHODS<br><span>WE BUILD ON</span></h2>
+        <p class="section-desc" style="margin:0 auto;">
+          Open datasets, foundational segmentation models, and graph-analysis libraries that power the pipeline.
+        </p>
+      </div>
+      <div class="reference-list">
+        <div class="reference-item">
+          <a href="https://spacenet.ai/datasets/" target="_blank" rel="noopener noreferrer"><i
+              class="fa-solid fa-external-link-alt" style="margin-right:0.5rem;"></i>SpaceNet Roads Dataset</a>
+          <p>High-resolution satellite imagery with road centreline annotations for model training.</p>
+        </div>
+        <div class="reference-item">
+          <a href="https://competitions.codalab.org/competitions/18467" target="_blank" rel="noopener noreferrer"><i
+              class="fa-solid fa-external-link-alt" style="margin-right:0.5rem;"></i>DeepGlobe Road Extraction Challenge</a>
+          <p>Public benchmark for road extraction from satellite imagery in diverse geographies.</p>
+        </div>
+        <div class="reference-item">
+          <a href="https://www.opensatmap.org/" target="_blank" rel="noopener noreferrer"><i
+              class="fa-solid fa-external-link-alt" style="margin-right:0.5rem;"></i>OpenSatMap</a>
+          <p>Open satellite-to-map dataset with aligned road and building labels.</p>
+        </div>
+        <div class="reference-item">
+          <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer"><i
+              class="fa-solid fa-external-link-alt" style="margin-right:0.5rem;"></i>OpenStreetMap</a>
+          <p>Crowdsourced road vectors used as auto-generated ground truth and benchmark reference.</p>
+        </div>
+        <div class="reference-item">
+          <a href="https://arxiv.org/abs/1505.04597" target="_blank" rel="noopener noreferrer"><i
+              class="fa-solid fa-external-link-alt" style="margin-right:0.5rem;"></i>U-Net: Convolutional Networks for Biomedical Image Segmentation</a>
+          <p>Ronneberger et al., 2015 — the encoder-decoder backbone for our segmentation head.</p>
+        </div>
+        <div class="reference-item">
+          <a href="https://arxiv.org/abs/1807.10165" target="_blank" rel="noopener noreferrer"><i
+              class="fa-solid fa-external-link-alt" style="margin-right:0.5rem;"></i>UNet++: A Nested U-Net Architecture for Medical Image Segmentation</a>
+          <p>Zhou et al., 2018 — dense skip connections for finer feature reuse.</p>
+        </div>
+        <div class="reference-item">
+          <a href="https://arxiv.org/abs/1706.05587" target="_blank" rel="noopener noreferrer"><i
+              class="fa-solid fa-external-link-alt" style="margin-right:0.5rem;"></i>DeepLabV3+: Encoder-Decoder with Atrous Separable Convolution</a>
+          <p>Chen et al., 2018 — multi-scale context for boundary-precise road masks.</p>
+        </div>
+        <div class="reference-item">
+          <a href="https://networkx.org/" target="_blank" rel="noopener noreferrer"><i
+              class="fa-solid fa-external-link-alt" style="margin-right:0.5rem;"></i>NetworkX</a>
+          <p>Python graph library for centrality, shortest paths, and resilience simulations.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download -->
+  <section class="section center-section" id="download">
+    <img src="https://images.unsplash.com/photo-1586281380349-632531db7ed4?auto=format&fit=crop&w=1920&q=80"
+      alt="Documents" class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-index"><span class="num">16</span><span class="divider"></span><span>Download Deliverables</span>
+    </div>
+    <div class="section-content">
+      <div class="intro-block">
+        <div class="section-label" style="justify-content:center;">Resources</div>
+        <h2 class="section-title">TAKE THE PITCH<br><span>WITH YOU</span></h2>
+        <p class="section-desc" style="margin:0 auto;">
+          One-click downloads for judges, mentors, and collaborators. (Placeholder links — replace with actual files
+          before submission.)
+        </p>
+      </div>
+      <div class="download-grid">
+        <div class="download-card">
+          <div class="download-icon"><i class="fa-solid fa-file-pdf"></i></div>
+          <h4 style="font-family:'Orbitron';font-size:0.85rem;">Executive Summary</h4>
+          <p style="font-family:'Rajdhani';font-size:0.85rem;color:var(--muted);line-height:1.5;">2-page PDF with problem,
+            approach, results, and impact.</p>
+          <a class="btn-secondary" href="#" onclick="alert('Add your PDF link here'); return false;" style="margin-top:auto;">
+            <i class="fa-solid fa-download"></i> Download
+          </a>
+        </div>
+        <div class="download-card">
+          <div class="download-icon"><i class="fa-solid fa-diagram-project"></i></div>
+          <h4 style="font-family:'Orbitron';font-size:0.85rem;">Architecture Diagram</h4>
+          <p style="font-family:'Rajdhani';font-size:0.85rem;color:var(--muted);line-height:1.5;">End-to-end pipeline
+            diagram from satellite tile to resilience index.</p>
+          <a class="btn-secondary" href="#" onclick="alert('Add your diagram link here'); return false;" style="margin-top:auto;">
+            <i class="fa-solid fa-download"></i> Download
+          </a>
+        </div>
+        <div class="download-card">
+          <div class="download-icon"><i class="fa-solid fa-code"></i></div>
+          <h4 style="font-family:'Orbitron';font-size:0.85rem;">GitHub Repository</h4>
+          <p style="font-family:'Rajdhani';font-size:0.85rem;color:var(--muted);line-height:1.5;">Source code, notebooks,
+            and reproducible training scripts.</p>
+          <a class="btn-secondary" href="https://github.com" target="_blank" rel="noopener noreferrer" style="margin-top:auto;">
+            <i class="fa-brands fa-github"></i> Open Repo
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section footer-section" id="footer">
+    <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80"
+      alt="Connected world" class="section-bg" />
+    <div class="section-overlay"></div>
+    <div class="section-content footer-content">
+      <div class="footer-logo-block">
+        <svg class="logo-svg" role="img" aria-label="Mission Setu Logo">
+          <use href="#missionSetuLogo"></use>
+        </svg>
+        <div class="nav-logo-text">
+          <span class="top">ISRO · PS-04</span>
+          <span class="bottom">ROUTE RESILIENCE</span>
+        </div>
+      </div>
+      <h2 class="footer-title">ROADS THAT<br><span class="orange">NEVER BREAK</span></h2>
+      <p class="footer-desc">
+        From satellite pixel to actionable urban intelligence — Route Resilience delivers occlusion-robust mapping,
+        topological healing, and predictive stress testing for India's rapidly growing metropolises.
+      </p>
+      <button class="btn-explore" onclick="lenis.scrollTo('#hero')">Back to Top <i
+          class="fa-solid fa-arrow-up"></i></button>
+    </div>
+    <div class="footer-bottom">
+      <div class="isro-credit"><i class="fa-solid fa-satellite"></i> ISRO NNRMS Hackathon · Problem Statement 04
+      </div>
+      <div style="font-family:'JetBrains Mono';font-size:0.55rem;color:var(--muted);letter-spacing:0.1em;">ROUTE
+        RESILIENCE · v1.0</div>
+    </div>
+  </section>
+  <script>
+    // LOADER
+    const loaderCanvas = document.getElementById('loaderCanvas');
+    const lctx = loaderCanvas.getContext('2d');
+    let loaderNodes = [], loaderProgress = 0, loaderActive = true;
+    const loaderStatuses = [
+      'Initializing neural pathways...', 'Loading satellite imagery...', 'Calibrating Transformer attention...',
+      'Building road segmentation model...', 'Constructing topological graph...', 'Computing betweenness centrality...',
+      'Running stress simulations...', 'Rendering dashboard layers...', 'Pipeline ready.'
+    ];
+    function initLoader() {
+      loaderCanvas.width = window.innerWidth; loaderCanvas.height = window.innerHeight; loaderNodes = [];
+      for (let i = 0; i < 60; i++) loaderNodes.push({
+        x: Math.random() * loaderCanvas.width, y: Math.random() * loaderCanvas.height,
+        vx: (Math.random() - 0.5) * 0.5, vy: (Math.random() - 0.5) * 0.5, r: 1.5 + Math.random() * 2,
+        color: ['#ff4d00', '#00d4ff', '#22c55e', '#a855f7'][Math.floor(Math.random() * 4)]
+      });
+    }
+    function drawLoader() {
+      if (!loaderActive) return;
+      lctx.fillStyle = '#020308'; lctx.fillRect(0, 0, loaderCanvas.width, loaderCanvas.height);
+      loaderNodes.forEach(n => { n.x += n.vx; n.y += n.vy; if (n.x < 0 || n.x > loaderCanvas.width) n.vx *= -1; if (n.y < 0 || n.y > loaderCanvas.height) n.vy *= -1; });
+      for (let i = 0; i < loaderNodes.length; i++) for (let j = i + 1; j < loaderNodes.length; j++) {
+        const dx = loaderNodes[i].x - loaderNodes[j].x, dy = loaderNodes[i].y - loaderNodes[j].y, d = Math.sqrt(dx * dx + dy * dy);
+        if (d < 150) { lctx.beginPath(); lctx.moveTo(loaderNodes[i].x, loaderNodes[i].y); lctx.lineTo(loaderNodes[j].x, loaderNodes[j].y); lctx.strokeStyle = `rgba(255,77,0,${0.08 * (1 - d / 150)})`; lctx.lineWidth = 0.5; lctx.stroke(); }
+      }
+      loaderNodes.forEach(n => { lctx.beginPath(); lctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); lctx.fillStyle = n.color; lctx.globalAlpha = 0.4; lctx.fill(); });
+      lctx.globalAlpha = 1;
+      if (loaderProgress < 100) requestAnimationFrame(drawLoader);
+    }
+    initLoader(); drawLoader();
+    const loadInterval = setInterval(() => {
+      loaderProgress += 2 + Math.random() * 4; if (loaderProgress > 100) loaderProgress = 100;
+      document.getElementById('loaderBar').style.width = loaderProgress + '%';
+      document.getElementById('loaderPercent').textContent = Math.floor(loaderProgress) + '%';
+      document.getElementById('loaderStatus').textContent = loaderStatuses[Math.min(Math.floor(loaderProgress / 12), loaderStatuses.length - 1)];
+      if (loaderProgress >= 100) {
+        clearInterval(loadInterval);
+        loaderActive = false;
+        setTimeout(() => document.getElementById('loadingScreen').classList.add('hidden'), 600);
+      }
+    }, 120);
+
+    // LENIS SMOOTH SCROLL
+    const lenis = new Lenis({
+      duration: 1.8,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      orientation: 'vertical',
+      gestureOrientation: 'vertical',
+      smoothWheel: true,
+      wheelMultiplier: 0.75,
+      touchMultiplier: 1.6,
+      infinite: false,
+    });
+    lenis.on('scroll', ScrollTrigger.update);
+    gsap.ticker.add((time) => { lenis.raf(time * 1000); });
+    gsap.ticker.lagSmoothing(0);
+
+    // MENU
+    function toggleMenu() {
+      const nav = document.getElementById('navLinks'), btn = document.getElementById('menuBtn');
+      nav.classList.toggle('active');
+      btn.innerHTML = nav.classList.contains('active') ? '<i class="fa-solid fa-xmark"></i>' : '<i class="fa-solid fa-bars"></i>';
+      if (nav.classList.contains('active')) lenis.stop(); else lenis.start();
+    }
+    function closeMenu() {
+      document.getElementById('navLinks').classList.remove('active');
+      document.getElementById('menuBtn').innerHTML = '<i class="fa-solid fa-bars"></i>';
+      lenis.start();
+    }
+
+    // NAV + SCROLL PROGRESS
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          document.getElementById('navbar').classList.toggle('nav-scrolled', window.scrollY > 50);
+          const sh = document.body.scrollHeight - window.innerHeight;
+          document.querySelector('.scroll-progress').style.width = (sh > 0 ? window.scrollY / sh * 100 : 0) + '%';
+          ticking = false;
+        }); ticking = true;
+      }
+    }, { passive: true });
+    document.querySelectorAll('.dot-nav-item').forEach(item => {
+      item.addEventListener('click', () => lenis.scrollTo(item.getAttribute('data-target')));
+    });
+
+    // REALISTIC EARTH, MOON & SATELLITE CONSTELLATION
+    let scene, camera, renderer, solarSystem, earth, clouds, atmosphere, starField;
+    let moon, moonOrbitRing, moonSatellite, moonSatOrbit;
+    let earthSatellites = [];
+    const textureLoader = new THREE.TextureLoader();
+
+    function createSatellite(scale = 1) {
+      const group = new THREE.Group();
+
+      // Body
+      const bodyGeo = new THREE.BoxGeometry(0.04 * scale, 0.04 * scale, 0.08 * scale);
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0xdddddd,
+        metalness: 0.85,
+        roughness: 0.2,
+        emissive: 0x222233,
+        emissiveIntensity: 0.15
+      });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      group.add(body);
+
+      // Solar panels
+      const panelGeo = new THREE.BoxGeometry(0.2 * scale, 0.008 * scale, 0.07 * scale);
+      const panelMat = new THREE.MeshStandardMaterial({
+        color: 0x0a0a20,
+        metalness: 0.9,
+        roughness: 0.08,
+        emissive: 0x1122ff,
+        emissiveIntensity: 0.2
+      });
+      const panel1 = new THREE.Mesh(panelGeo, panelMat);
+      panel1.position.x = 0.12 * scale;
+      const panel2 = new THREE.Mesh(panelGeo, panelMat);
+      panel2.position.x = -0.12 * scale;
+      group.add(panel1, panel2);
+
+      // Antenna
+      const antennaGeo = new THREE.CylinderGeometry(0.003 * scale, 0.003 * scale, 0.1 * scale);
+      const antennaMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const antenna = new THREE.Mesh(antennaGeo, antennaMat);
+      antenna.position.y = 0.07 * scale;
+      group.add(antenna);
+
+      // Blinking light
+      const lightGeo = new THREE.SphereGeometry(0.008 * scale, 8, 8);
+      const lightMat = new THREE.MeshBasicMaterial({ color: 0xff4400 });
+      const light = new THREE.Mesh(lightGeo, lightMat);
+      light.position.z = 0.05 * scale;
+      group.add(light);
+
+      // Direction marker so satellite faces Earth
+      group.userData = { lightMat: lightMat };
+
+      return group;
+    }
+
+    function initEarth() {
+      const container = document.getElementById('globeContainer');
+      const w = container.clientWidth, h = container.clientHeight;
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 2000);
+      camera.position.set(0, 0.3, 3.8);
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      container.appendChild(renderer.domElement);
+
+      // Lights
+      const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
+      sunLight.position.set(10, 5, 10);
+      scene.add(sunLight);
+      scene.add(new THREE.AmbientLight(0x334455, 0.4));
+      const rimLight = new THREE.DirectionalLight(0x4488ff, 0.5);
+      rimLight.position.set(-8, 2, -10);
+      scene.add(rimLight);
+
+      // Solar system group - shifted up to align Earth center with "SEE" line
+      solarSystem = new THREE.Group();
+      solarSystem.position.y = 0.55;
+      scene.add(solarSystem);
+
+      // Earth
+      const earthMap = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
+      const bumpMap = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-topology.png');
+
+      earth = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 128, 128),
+        new THREE.MeshStandardMaterial({
+          map: earthMap,
+          bumpMap: bumpMap,
+          bumpScale: 0.05,
+          roughness: 0.65,
+          metalness: 0.05,
+          color: 0xffffff
+        })
+      );
+      earth.rotation.z = 23.5 * Math.PI / 180;
+      earth.rotation.y = -1.4;
+      solarSystem.add(earth);
+
+      // City lights
+      const nightTexture = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-night.jpg');
+      const cityLights = new THREE.Mesh(
+        new THREE.SphereGeometry(1.006, 128, 128),
+        new THREE.MeshBasicMaterial({ map: nightTexture, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending })
+      );
+      cityLights.rotation.z = 23.5 * Math.PI / 180;
+      earth.add(cityLights);
+
+      // Clouds
+      clouds = new THREE.Mesh(
+        new THREE.SphereGeometry(1.012, 128, 128),
+        new THREE.MeshPhongMaterial({
+          map: textureLoader.load('https://unpkg.com/three-globe/example/img/earth-clouds.png'),
+          transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, side: THREE.DoubleSide
+        })
+      );
+      clouds.rotation.z = 23.5 * Math.PI / 180;
+      solarSystem.add(clouds);
+
+      // Atmosphere
+      atmosphere = new THREE.Mesh(
+        new THREE.SphereGeometry(1.16, 128, 128),
+        new THREE.ShaderMaterial({
+          transparent: true, side: THREE.BackSide,
+          uniforms: { glowColor: { value: new THREE.Color(0x3399ff) }, viewVector: { value: camera.position }, c: { value: 0.38 }, p: { value: 6.0 } },
+          vertexShader: `uniform vec3 viewVector; uniform float c; uniform float p; varying float intensity; void main(){ vec3 vNormal=normalize(normalMatrix*normal); vec3 vNormel=normalize(normalMatrix*viewVector); intensity=pow(c-dot(vNormal,vNormel),p); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+          fragmentShader: `uniform vec3 glowColor; varying float intensity; void main(){ vec3 glow=glowColor*intensity; gl_FragColor=vec4(glow,intensity*0.6); }`
+        })
+      );
+      solarSystem.add(atmosphere);
+
+      // Moon orbit group
+      const moonOrbit = new THREE.Group();
+      moonOrbit.rotation.x = 0.18; // slight tilt
+      moonOrbit.rotation.z = 0.08;
+      solarSystem.add(moonOrbit);
+
+      // Moon orbit ring
+      const ringGeo = new THREE.RingGeometry(2.45, 2.47, 128);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.04, side: THREE.DoubleSide });
+      moonOrbitRing = new THREE.Mesh(ringGeo, ringMat);
+      moonOrbit.add(moonOrbitRing);
+
+      // Moon
+      const moonTexture = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_moon.jpg');
+      moon = new THREE.Mesh(
+        new THREE.SphereGeometry(0.22, 64, 64),
+        new THREE.MeshStandardMaterial({
+          map: moonTexture,
+          roughness: 0.85,
+          metalness: 0.05,
+          color: 0xffffff
+        })
+      );
+      moon.position.set(2.5, 0, 0);
+      moonOrbit.add(moon);
+
+      // Mini satellite orbiting Moon
+      const moonSat = createSatellite(0.45);
+      moonSat.position.set(0.42, 0, 0);
+      moonSatOrbit = new THREE.Group();
+      moonSatOrbit.add(moonSat);
+      moon.add(moonSatOrbit);
+
+      // 32 Earth satellites across multiple orbital shells
+      const satelliteConfigs = [
+        { count: 16, rMin: 1.25, rMax: 1.5, speedMin: 0.4, speedMax: 0.7 },
+        { count: 10, rMin: 1.8, rMax: 2.2, speedMin: 0.2, speedMax: 0.35 },
+        { count: 6, rMin: 2.7, rMax: 3.2, speedMin: 0.08, speedMax: 0.15 }
+      ];
+
+      satelliteConfigs.forEach(shell => {
+        for (let i = 0; i < shell.count; i++) {
+          const radius = shell.rMin + Math.random() * (shell.rMax - shell.rMin);
+          const speed = shell.speedMin + Math.random() * (shell.speedMax - shell.speedMin);
+          const phase = Math.random() * Math.PI * 2;
+          const incX = (Math.random() - 0.5) * 1.2; // inclination around X
+          const incY = Math.random() * Math.PI * 2; // argument of ascending node
+
+          const orbitGroup = new THREE.Group();
+          orbitGroup.rotation.x = incX;
+          orbitGroup.rotation.y = incY;
+          solarSystem.add(orbitGroup);
+
+          // Orbit ring
+          const satRingGeo = new THREE.RingGeometry(radius - 0.008, radius + 0.008, 128);
+          const satRingMat = new THREE.MeshBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.03, side: THREE.DoubleSide });
+          const satRing = new THREE.Mesh(satRingGeo, satRingMat);
+          orbitGroup.add(satRing);
+
+          // Satellite
+          const scale = 0.15 + Math.random() * 0.15;
+          const sat = createSatellite(scale);
+          sat.position.set(radius, 0, 0);
+          orbitGroup.add(sat);
+
+          earthSatellites.push({
+            mesh: sat,
+            orbitGroup: orbitGroup,
+            radius: radius,
+            speed: speed,
+            phase: phase,
+            ring: satRing
+          });
+        }
+      });
+
+      // Stars
+      const starGeo = new THREE.BufferGeometry();
+      const starCount = 3000;
+      const positions = new Float32Array(starCount * 3);
+      const colors = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount; i++) {
+        const r = 80 + Math.random() * 60;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        positions[i * 3 + 2] = r * Math.cos(phi);
+        const c = new THREE.Color();
+        c.setHSL(Math.random() * 0.2 + 0.55, 0.3, 0.65 + Math.random() * 0.3);
+        colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+      }
+      starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      starField = new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 0.12, vertexColors: true, transparent: true, opacity: 0.85, sizeAttenuation: true }));
+      scene.add(starField);
+
+      window.addEventListener('resize', onEarthResize, { passive: true });
+      animateEarth();
+    }
+
+    function onEarthResize() {
+      if (!renderer) return;
+      const container = document.getElementById('globeContainer');
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    let earthActive = true;
+    function animateEarth() {
+      if (!earthActive) return;
+      requestAnimationFrame(animateEarth);
+
+      const time = Date.now() * 0.0005;
+
+      // Earth rotation
+      earth.rotation.y += 0.0004;
+      clouds.rotation.y += 0.0006;
+
+      // Moon orbit
+      moon.position.x = Math.cos(time * 0.35) * 2.5;
+      moon.position.z = Math.sin(time * 0.35) * 2.5;
+      moon.rotation.y += 0.001;
+
+      // Mini satellite around moon
+      moonSatOrbit.rotation.y += 0.025;
+
+      // Earth satellites
+      earthSatellites.forEach(sat => {
+        const angle = time * sat.speed + sat.phase;
+        sat.mesh.position.x = Math.cos(angle) * sat.radius;
+        sat.mesh.position.z = Math.sin(angle) * sat.radius;
+        sat.mesh.lookAt(0, 0, 0);
+
+        // Blink effect
+        if (sat.mesh.userData.lightMat) {
+          const blink = (Math.sin(time * 8 + sat.phase * 3) + 1) / 2;
+          sat.mesh.userData.lightMat.color.setHSL(0.05 + blink * 0.08, 1, 0.3 + blink * 0.4);
+        }
+      });
+
+      // Atmosphere update
+      if (atmosphere) atmosphere.material.uniforms.viewVector.value = camera.position;
+
+      // Star field
+      if (starField) starField.rotation.y += 0.00002;
+
+      renderer.render(scene, camera);
+    }
+
+    initEarth();
+
+    // CANVAS HELPERS with visibility pause
+    const animatedCanvases = new Map();
+    function setupCanvas(id, h) {
+      const c = document.getElementById(id), ctx = c.getContext('2d');
+      function resize() { c.width = c.parentElement.clientWidth; c.height = h; }
+      resize();
+      window.addEventListener('resize', resize, { passive: true });
+      return { c, ctx, id };
+    }
+
+    // OCCLUSION DEMO
+    const occFail = setupCanvas('occFailCanvas', 180);
+    function drawOccFail() {
+      if (!animatedCanvases.get('occFail')) return;
+      const { c, ctx } = occFail; ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.strokeStyle = 'rgba(239,68,68,0.6)'; ctx.lineWidth = 3;
+      const roads = [[0.1, 0.3], [0.25, 0.35], [0.35, 0.38], [0.5, 0.45], [0.6, 0.5], [0.75, 0.4], [0.15, 0.7], [0.3, 0.65], [0.45, 0.6], [0.55, 0.55], [0.7, 0.65], [0.9, 0.7], [0.2, 0.15], [0.4, 0.2], [0.55, 0.22], [0.7, 0.18]];
+      for (let k = 0; k < roads.length; k += 2) { ctx.beginPath(); ctx.moveTo(roads[k][0] * c.width, roads[k][1] * c.height); ctx.lineTo(roads[k + 1][0] * c.width, roads[k + 1][1] * c.height); ctx.stroke(); }
+      const patches = [[0.28, 0.3, 0.1], [0.52, 0.42, 0.08], [0.78, 0.38, 0.07], [0.35, 0.58, 0.09], [0.62, 0.2, 0.06]];
+      patches.forEach(([x, y, r]) => { const grd = ctx.createRadialGradient(x * c.width, y * c.height, 0, x * c.width, y * c.height, r * c.width); grd.addColorStop(0, 'rgba(100,100,100,0.4)'); grd.addColorStop(1, 'rgba(100,100,100,0)'); ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(x * c.width, y * c.height, r * c.width, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(34,197,94,0.25)'; ctx.beginPath(); ctx.arc(x * c.width, y * c.height, r * c.width * 0.5, 0, Math.PI * 2); ctx.fill(); });
+      ctx.fillStyle = 'rgba(239,68,68,0.7)'; ctx.font = '9px "JetBrains Mono"'; ctx.fillText('× GAP', 0.29 * c.width, 0.36 * c.height); ctx.fillText('× GAP', 0.53 * c.width, 0.48 * c.height); ctx.fillText('× GAP', 0.78 * c.width, 0.43 * c.height);
+      requestAnimationFrame(drawOccFail);
+    }
+    const occPass = setupCanvas('occPassCanvas', 180);
+    function drawOccPass() {
+      if (!animatedCanvases.get('occPass')) return;
+      const { c, ctx } = occPass; ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.strokeStyle = 'rgba(34,197,94,0.7)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(0.05 * c.width, 0.3 * c.height); ctx.quadraticCurveTo(0.3 * c.width, 0.35 * c.height, 0.5 * c.width, 0.45 * c.height); ctx.quadraticCurveTo(0.7 * c.width, 0.5 * c.height, 0.95 * c.width, 0.4 * c.height); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0.1 * c.width, 0.7 * c.height); ctx.quadraticCurveTo(0.35 * c.width, 0.65 * c.height, 0.55 * c.width, 0.55 * c.height); ctx.quadraticCurveTo(0.75 * c.width, 0.6 * c.height, 0.95 * c.width, 0.7 * c.height); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0.15 * c.width, 0.15 * c.height); ctx.quadraticCurveTo(0.4 * c.width, 0.2 * c.height, 0.55 * c.width, 0.22 * c.height); ctx.quadraticCurveTo(0.7 * c.width, 0.18 * c.height, 0.9 * c.width, 0.15 * c.height); ctx.stroke();
+      ctx.strokeStyle = 'rgba(34,197,94,0.4)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0.3 * c.width, 0.2 * c.height); ctx.lineTo(0.35 * c.width, 0.35 * c.height); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0.55 * c.width, 0.22 * c.height); ctx.lineTo(0.5 * c.width, 0.45 * c.height); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0.5 * c.width, 0.45 * c.height); ctx.lineTo(0.55 * c.width, 0.55 * c.height); ctx.stroke();
+      [[0.3, 0.35], [0.55, 0.45], [0.75, 0.5]].forEach(([x, y]) => { const grd = ctx.createRadialGradient(x * c.width, y * c.height, 0, x * c.width, y * c.height, 12); grd.addColorStop(0, 'rgba(34,197,94,0.5)'); grd.addColorStop(1, 'rgba(34,197,94,0)'); ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(x * c.width, y * c.height, 12, 0, Math.PI * 2); ctx.fill(); });
+      [[0.3, 0.35], [0.5, 0.45], [0.55, 0.55], [0.75, 0.5], [0.3, 0.2], [0.55, 0.22], [0.35, 0.65]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x * c.width, y * c.height, 3, 0, Math.PI * 2); ctx.fillStyle = '#22c55e'; ctx.fill(); });
+      ctx.fillStyle = 'rgba(34,197,94,0.7)'; ctx.font = '9px "JetBrains Mono"'; ctx.textAlign = 'center'; ctx.fillText('✓ CONNECTED', 0.35 * c.width, 0.48 * c.height);
+      requestAnimationFrame(drawOccPass);
+    }
+    setTimeout(() => { animatedCanvases.set('occFail', true); animatedCanvases.set('occPass', true); drawOccFail(); drawOccPass(); }, 400);
+
+    // MODEL ARCH
+    const modelArch = setupCanvas('modelArchCanvas', 280);
+    function drawModelArch() {
+      if (!animatedCanvases.get('modelArch')) return;
+      const { c, ctx } = modelArch; ctx.fillStyle = '#03050a'; ctx.fillRect(0, 0, c.width, c.height); const t = Date.now() * 0.001;
+      const blocks = [{ x: 0.05, w: 0.12, label: 'INPUT', sub: 'Satellite\nTile', color: '#ff4d00' }, { x: 0.2, w: 0.12, label: 'ENCODER', sub: 'ResNet\nBackbone', color: '#00d4ff' }, { x: 0.35, w: 0.14, label: 'TRANSFORMER', sub: 'Spatial +\nChannel Attn', color: '#a855f7' }, { x: 0.52, w: 0.12, label: 'DECODER', sub: 'UNet++\nUpsampling', color: '#00d4ff' }, { x: 0.67, w: 0.12, label: 'OUTPUT', sub: 'Road\nMask', color: '#22c55e' }, { x: 0.82, w: 0.14, label: 'LOSS', sub: 'Dice+IoU+\nConnectivity', color: '#eab308' }];
+      const cy = c.height * 0.45, bh = c.height * 0.35;
+      blocks.forEach((b, i) => { const bx = b.x * c.width, bw = b.w * c.width, by = cy - bh / 2; ctx.fillStyle = b.color + '15'; ctx.strokeStyle = b.color + '60'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill(); ctx.stroke(); ctx.fillStyle = b.color; ctx.font = 'bold 8px "Orbitron"'; ctx.textAlign = 'center'; ctx.fillText(b.label, bx + bw / 2, by + 16); ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '9px "Rajdhani"'; b.sub.split('\n').forEach((line, li) => ctx.fillText(line, bx + bw / 2, by + 32 + li * 13)); if (i < blocks.length - 1) { const next = blocks[i + 1], ax1 = bx + bw + 2, ax2 = next.x * c.width - 2, progress = ((t * 0.5 + i * 0.3) % 1), dotX = ax1 + (ax2 - ax1) * progress; ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ax1, cy); ctx.lineTo(ax2, cy); ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.beginPath(); ctx.moveTo(ax2, cy - 3); ctx.lineTo(ax2 + 5, cy); ctx.lineTo(ax2, cy + 3); ctx.closePath(); ctx.fill(); ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(dotX, cy, 2.5, 0, Math.PI * 2); ctx.fill(); } });
+      ctx.fillStyle = 'rgba(255,77,0,0.5)'; ctx.font = '8px "JetBrains Mono"'; ctx.textAlign = 'left'; ctx.fillText('Albumentations → Normalize → Simulate Occlusions → Balance Dataset', c.width * 0.05, c.height * 0.88);
+      requestAnimationFrame(drawModelArch);
+    }
+    setTimeout(() => { animatedCanvases.set('modelArch', true); drawModelArch(); }, 500);
+
+    // HEALING
+    const healingSetup = setupCanvas('healingCanvas', 320); let healNodes = [], healEdges = [], healedEdges = [];
+    function initHealing() { const c = healingSetup.c; healNodes = []; healEdges = []; healedEdges = []; for (let i = 0; i < 45; i++)healNodes.push({ x: 0.08 * c.width + Math.random() * 0.84 * c.width, y: 0.08 * c.height + Math.random() * 0.84 * c.height, cluster: Math.floor(Math.random() * 4) }); for (let i = 0; i < healNodes.length; i++)for (let j = i + 1; j < healNodes.length; j++)if (healNodes[i].cluster === healNodes[j].cluster) { const dx = healNodes[i].x - healNodes[j].x, dy = healNodes[i].y - healNodes[j].y, d = Math.sqrt(dx * dx + dy * dy); if (d < c.width * 0.15) healEdges.push([i, j]); } for (let i = 0; i < healNodes.length; i++)for (let j = i + 1; j < healNodes.length; j++)if (healNodes[i].cluster !== healNodes[j].cluster) { const dx = healNodes[i].x - healNodes[j].x, dy = healNodes[i].y - healNodes[j].y, d = Math.sqrt(dx * dx + dy * dy); if (d < c.width * 0.12 && Math.random() < 0.3) healedEdges.push([i, j]); } }
+    function drawHealing() { if (!animatedCanvases.get('healing')) return; const { c, ctx } = healingSetup; ctx.fillStyle = '#03050a'; ctx.fillRect(0, 0, c.width, c.height); const t = Date.now() * 0.001; const colors = ['rgba(255,77,0,0.25)', 'rgba(0,212,255,0.25)', 'rgba(168,85,247,0.25)', 'rgba(234,179,8,0.25)']; healEdges.forEach(([a, b]) => { ctx.beginPath(); ctx.moveTo(healNodes[a].x, healNodes[a].y); ctx.lineTo(healNodes[b].x, healNodes[b].y); ctx.strokeStyle = colors[healNodes[a].cluster]; ctx.lineWidth = 1.5; ctx.stroke(); }); healedEdges.forEach(([a, b], idx) => { const phase = (t * 0.5 + idx * 0.2) % 3; if (phase > 1) { ctx.beginPath(); ctx.moveTo(healNodes[a].x, healNodes[a].y); ctx.lineTo(healNodes[b].x, healNodes[b].y); ctx.strokeStyle = 'rgba(34,197,94,0.6)'; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = 'rgba(34,197,94,0.4)'; ctx.font = '7px "JetBrains Mono"'; ctx.textAlign = 'center'; ctx.fillText('MST', (healNodes[a].x + healNodes[b].x) / 2, (healNodes[a].y + healNodes[b].y) / 2 - 5); } }); healNodes.forEach(n => { ctx.beginPath(); ctx.arc(n.x, n.y, 3, 0, Math.PI * 2); ctx.fillStyle = ['#ff4d00', '#00d4ff', '#a855f7', '#eab308'][n.cluster]; ctx.fill(); }); ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '8px "JetBrains Mono"'; ctx.fillText('— Existing roads   --- MST healed gaps', 10, c.height - 10); requestAnimationFrame(drawHealing); }
+    setTimeout(() => { initHealing(); animatedCanvases.set('healing', true); drawHealing(); }, 600); window.addEventListener('resize', () => setTimeout(initHealing, 100), { passive: true });
+
+    // CENTRALITY
+    const centralitySetup = setupCanvas('centralityCanvas', 340); let cenNodes = [], cenEdges = [];
+    function initCentrality() { const c = centralitySetup.c; cenNodes = []; cenEdges = []; for (let i = 0; i < 55; i++)cenNodes.push({ x: 0.06 * c.width + Math.random() * 0.88 * c.width, y: 0.06 * c.height + Math.random() * 0.88 * c.height, centrality: Math.random() }); cenNodes[5].centrality = 0.95; cenNodes[5].x = c.width * 0.35; cenNodes[5].y = c.height * 0.4; cenNodes[15].centrality = 0.88; cenNodes[15].x = c.width * 0.65; cenNodes[15].y = c.height * 0.55; cenNodes[25].centrality = 0.92; cenNodes[25].x = c.width * 0.5; cenNodes[25].y = c.height * 0.25; for (let i = 0; i < cenNodes.length; i++)for (let j = i + 1; j < cenNodes.length; j++) { const dx = cenNodes[i].x - cenNodes[j].x, dy = cenNodes[i].y - cenNodes[j].y, d = Math.sqrt(dx * dx + dy * dy); if (d < c.width * 0.13) cenEdges.push([i, j]); } }
+    function drawCentrality() { if (!animatedCanvases.get('centrality')) return; const { c, ctx } = centralitySetup; ctx.fillStyle = '#03050a'; ctx.fillRect(0, 0, c.width, c.height); const t = Date.now() * 0.001; cenEdges.forEach(([a, b]) => { const maxC = Math.max(cenNodes[a].centrality, cenNodes[b].centrality); ctx.beginPath(); ctx.moveTo(cenNodes[a].x, cenNodes[a].y); ctx.lineTo(cenNodes[b].x, cenNodes[b].y); if (maxC > 0.8) { ctx.strokeStyle = `rgba(239,68,68,${0.15 + maxC * 0.35})`; ctx.lineWidth = 2; } else { ctx.strokeStyle = `rgba(255,255,255,${0.05 + maxC * 0.1})`; ctx.lineWidth = 1; } ctx.stroke(); }); cenNodes.forEach((n, i) => { const c2 = n.centrality; let color, r; if (c2 > 0.85) { color = '#ef4444'; r = 6 + Math.sin(t * 3 + i) * 2; const grd = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 25); grd.addColorStop(0, 'rgba(239,68,68,0.4)'); grd.addColorStop(1, 'rgba(239,68,68,0)'); ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(n.x, n.y, 25, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = 'rgba(239,68,68,0.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(n.x, n.y, 12 + Math.sin(t * 2) * 5, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = '#ef4444'; ctx.font = 'bold 8px "Orbitron"'; ctx.textAlign = 'center'; ctx.fillText('GATEKEEPER', n.x, n.y - 14); } else if (c2 > 0.5) { color = '#eab308'; r = 3; } else { color = 'rgba(255,255,255,0.4)'; r = 2; } ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); }); ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = '8px "JetBrains Mono"'; ctx.fillText('Node size ∝ Betweenness Centrality    🔴 Critical    🟡 Moderate    ⚪ Low', 10, c.height - 10); requestAnimationFrame(drawCentrality); }
+    setTimeout(() => { initCentrality(); animatedCanvases.set('centrality', true); drawCentrality(); }, 700); window.addEventListener('resize', () => setTimeout(initCentrality, 100), { passive: true });
+
+    // STRESS
+    const stressSetup = setupCanvas('stressCanvas', 320);
+    function drawStress() { if (!animatedCanvases.get('stress')) return; const { c, ctx } = stressSetup; ctx.fillStyle = '#03050a'; ctx.fillRect(0, 0, c.width, c.height); const t = Date.now() * 0.001; const chartX = c.width * 0.08, chartW = c.width * 0.84, chartY = c.height * 0.12, chartH = c.height * 0.7; ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 0.5; for (let i = 0; i <= 5; i++) { const y = chartY + (chartH / 5) * i; ctx.beginPath(); ctx.moveTo(chartX, y); ctx.lineTo(chartX + chartW, y); ctx.stroke(); } ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '8px "JetBrains Mono"'; ctx.textAlign = 'right';['1.0', '0.8', '0.6', '0.4', '0.2', '0.0'].forEach((l, i) => ctx.fillText(l, chartX - 5, chartY + (chartH / 5) * i + 3)); ctx.textAlign = 'center'; ctx.fillText('Nodes Removed →', chartX + chartW / 2, chartY + chartH + 20); const points = [1.0, 0.92, 0.78, 0.55, 0.31, 0.12, 0.04]; ctx.beginPath(); points.forEach((p, i) => { const x = chartX + (chartW / (points.length - 1)) * i, y = chartY + chartH * (1 - p); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 3; ctx.shadowColor = '#a855f7'; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0; points.forEach((p, i) => { const x = chartX + (chartW / (points.length - 1)) * i, y = chartY + chartH * (1 - p); ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fillStyle = p < 0.4 ? '#ef4444' : p < 0.7 ? '#eab308' : '#a855f7'; ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '7px "JetBrains Mono"'; ctx.fillText(i.toString(), x, chartY + chartH + 10); }); const dangerY = chartY + chartH * 0.6; ctx.fillStyle = 'rgba(239,68,68,0.05)'; ctx.fillRect(chartX, dangerY, chartW, chartY + chartH - dangerY); ctx.strokeStyle = 'rgba(239,68,68,0.3)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(chartX, dangerY); ctx.lineTo(chartX + chartW, dangerY); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = 'rgba(239,68,68,0.5)'; ctx.font = '8px "JetBrains Mono"'; ctx.textAlign = 'right'; ctx.fillText('CRITICAL THRESHOLD', chartX + chartW - 5, dangerY - 4); const ablationIdx = Math.floor((t * 0.3) % points.length), ax = chartX + (chartW / (points.length - 1)) * ablationIdx, ay = chartY + chartH * (1 - points[ablationIdx]); ctx.strokeStyle = 'rgba(168,85,247,0.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(ax, ay, 10 + Math.sin(t * 3) * 3, 0, Math.PI * 2); ctx.stroke(); ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.font = '8px "JetBrains Mono"'; ctx.fillText('Resilience Index (Rᵢ) vs. Nodes Ablated', chartX, chartY - 5); requestAnimationFrame(drawStress); }
+    setTimeout(() => { animatedCanvases.set('stress', true); drawStress(); }, 800);
+
+    // GSAP ANIMATIONS
+    gsap.registerPlugin(ScrollTrigger);
+    document.querySelectorAll('.section').forEach((sec, i) => { if (i === 0) return; const content = sec.querySelector('.section-content'); gsap.fromTo(content, { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 1.1, ease: 'power3.out', scrollTrigger: { trigger: sec, start: 'top 82%', toggleActions: 'play none none reverse' } }); });
+    document.querySelectorAll('.card, .objective-card, .challenge-card, .dataset-item, .timeline-item, .impact-card, .reference-item, .download-card').forEach((el, i) => { gsap.fromTo(el, { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.7, ease: 'power2.out', scrollTrigger: { trigger: el, start: 'top 88%', toggleActions: 'play none none reverse' }, delay: i * 0.04 }); });
+    gsap.to('.hero-title', { y: -50, ease: 'none', scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true } });
+    gsap.to('.hero-stats', { y: -25, ease: 'none', scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true } });
+
+    // ACTIVE NAV
+    const allSections = document.querySelectorAll('section[id]'), dotItems = document.querySelectorAll('.dot-nav-item'), navLinks = document.querySelectorAll('.nav-links a');
+    lenis.on('scroll', ({ scroll }) => { let current = ''; allSections.forEach(sec => { if (scroll >= sec.offsetTop - 300) current = sec.getAttribute('id'); }); navLinks.forEach(a => { a.classList.remove('active'); if (a.getAttribute('href') === '#' + current) a.classList.add('active'); }); dotItems.forEach(item => { item.classList.remove('active'); if (item.getAttribute('data-target') === '#' + current) item.classList.add('active'); }); });
+
+    // INTERSECTION OBSERVER for performance
+    const canvasSections = [
+      { id: 'problem', keys: ['occFail', 'occPass'] },
+      { id: 'phase1', keys: ['modelArch'] },
+      { id: 'phase2', keys: ['healing'] },
+      { id: 'phase3', keys: ['centrality'] },
+      { id: 'stress', keys: ['stress'] }
+    ];
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        const sec = canvasSections.find(s => s.id === entry.target.id);
+        if (sec) {
+          const visible = entry.isIntersecting;
+          sec.keys.forEach(k => {
+            animatedCanvases.set(k, visible);
+            if (visible) {
+              if (k === 'occFail') drawOccFail();
+              if (k === 'occPass') drawOccPass();
+              if (k === 'modelArch') drawModelArch();
+              if (k === 'healing') drawHealing();
+              if (k === 'centrality') drawCentrality();
+              if (k === 'stress') drawStress();
+            }
+          });
+        }
+        if (entry.target.id === 'hero') {
+          earthActive = entry.isIntersecting;
+          if (earthActive) animateEarth();
+        }
+      });
+    }, { threshold: 0.05, rootMargin: '50px' });
+    document.querySelectorAll('section[id]').forEach(sec => observer.observe(sec));
+
+    // LEAFLET DASHBOARD
+    let map, mapNodes = [], mapEdges = [], mapLayers = [], disabledMapNodes = new Set(), mapMode = 'heat';
+    function initMap() {
+      const mapEl = document.getElementById('leafletMap');
+      if (!mapEl) return;
+      map = L.map('leafletMap', {
+        center: [12.9716, 77.5946],
+        zoom: 13,
+        zoomControl: false,
+        attributionControl: false
+      });
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 19
+      }).addTo(map);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      generateMapGraph();
+      updateMap();
+      document.getElementById('mapNodeCount').textContent = mapNodes.length;
+    }
+
+    function generateMapGraph() {
+      mapNodes = [];
+      mapEdges = [];
+      const center = [12.9716, 77.5946];
+      const gridSize = 7;
+      const span = 0.06;
+      for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+          const lat = center[0] + (i - gridSize / 2) * span / gridSize + (Math.random() - 0.5) * 0.005;
+          const lng = center[1] + (j - gridSize / 2) * span / gridSize + (Math.random() - 0.5) * 0.005;
+          const criticality = Math.random();
+          mapNodes.push({ lat, lng, criticality, id: i * gridSize + j });
+        }
+      }
+      // Mark a few gatekeepers
+      mapNodes[24].criticality = 0.95;
+      mapNodes[17].criticality = 0.9;
+      mapNodes[31].criticality = 0.88;
+      mapNodes[10].criticality = 0.82;
+      for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+          const idx = i * gridSize + j;
+          if (j < gridSize - 1) mapEdges.push([idx, idx + 1]);
+          if (i < gridSize - 1) mapEdges.push([idx, idx + gridSize]);
+          if (i < gridSize - 1 && j < gridSize - 1 && Math.random() < 0.25) mapEdges.push([idx, idx + gridSize + 1]);
+        }
+      }
+    }
+
+    function getNodeColor(n) {
+      if (disabledMapNodes.has(n.id)) return '#ef4444';
+      if (n.criticality > 0.85) return '#ef4444';
+      if (n.criticality > 0.5) return '#eab308';
+      return '#00d4ff';
+    }
+
+    function getNodeRadius(n) {
+      if (n.criticality > 0.85) return 8;
+      if (n.criticality > 0.5) return 5;
+      return 3;
+    }
+
+    function updateMap() {
+      if (!map) return;
+      mapLayers.forEach(l => map.removeLayer(l));
+      mapLayers = [];
+      // Draw edges
+      mapEdges.forEach(([a, b]) => {
+        const na = mapNodes[a], nb = mapNodes[b];
+        const aDisabled = disabledMapNodes.has(na.id), bDisabled = disabledMapNodes.has(nb.id);
+        let color = 'rgba(0,212,255,0.3)', weight = 2;
+        if (aDisabled || bDisabled) {
+          color = 'rgba(239,68,68,0.15)';
+          weight = 1;
+        } else if (na.criticality > 0.85 || nb.criticality > 0.85) {
+          color = 'rgba(239,68,68,0.5)';
+          weight = 3;
+        } else if (na.criticality > 0.5 || nb.criticality > 0.5) {
+          color = 'rgba(234,179,8,0.3)';
+          weight = 2;
+        }
+        const polyline = L.polyline([[na.lat, na.lng], [nb.lat, nb.lng]], { color, weight, opacity: 0.8 }).addTo(map);
+        mapLayers.push(polyline);
+      });
+      // Draw reroute path if nodes disabled
+      if (disabledMapNodes.size > 0) {
+        const start = mapNodes[0], end = mapNodes[mapNodes.length - 1];
+        const path = L.polyline([[start.lat, start.lng], [start.lat + 0.01, start.lng - 0.02], [end.lat, end.lng]], {
+          color: '#22c55e', weight: 3, opacity: 0.6, dashArray: '6, 6'
+        }).addTo(map);
+        mapLayers.push(path);
+      }
+      // Draw nodes
+      mapNodes.forEach(n => {
+        const color = getNodeColor(n);
+        const radius = disabledMapNodes.has(n.id) ? 6 : getNodeRadius(n);
+        const circle = L.circleMarker([n.lat, n.lng], {
+          radius, color, fillColor: color, fillOpacity: 0.8, weight: 2
+        }).addTo(map);
+        circle.on('click', () => {
+          if (mapMode === 'sim') {
+            if (disabledMapNodes.has(n.id)) disabledMapNodes.delete(n.id);
+            else disabledMapNodes.add(n.id);
+            updateMap();
+            updateMapMetrics();
+          }
+        });
+        circle.bindTooltip(`Node ${n.id}<br>Criticality: ${n.criticality.toFixed(2)}${disabledMapNodes.has(n.id) ? '<br><span style="color:#ef4444">DISABLED</span>' : ''}`, {
+          direction: 'top', className: 'map-tooltip'
+        });
+        mapLayers.push(circle);
+      });
+    }
+
+    function updateMapMetrics() {
+      const count = mapNodes.length;
+      const disabled = disabledMapNodes.size;
+      const ri = Math.max(0, (1 - disabled * 0.22)).toFixed(2);
+      document.getElementById('mapNodeCount').textContent = count;
+      document.getElementById('mapDisabledCount').textContent = disabled;
+      document.getElementById('mapRi').textContent = ri;
+    }
+
+    function setMapMode(mode) {
+      mapMode = mode;
+      document.querySelectorAll('.dash-tool').forEach(t => t.classList.remove('active'));
+      if (mode === 'heat') {
+        document.getElementById('heatTool').classList.add('active');
+        document.getElementById('mapModeText').textContent = 'Mode: Criticality Heatmap';
+      } else {
+        document.getElementById('simTool').classList.add('active');
+        document.getElementById('mapModeText').textContent = 'Mode: Click nodes to disable';
+      }
+    }
+
+    function resetMap() {
+      disabledMapNodes.clear();
+      updateMap();
+      updateMapMetrics();
+      setMapMode('heat');
+    }
+
+    // Initialize map after dashboard scroll
+    let mapInitialized = false;
+    const mapObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && !mapInitialized) {
+          mapInitialized = true;
+          setTimeout(initMap, 300);
+        }
+      });
+    }, { threshold: 0.1 });
+    mapObserver.observe(document.getElementById('dashboard'));
+
+    // Custom tooltip style
+    const style = document.createElement('style');
+    style.textContent = `
+      .map-tooltip { background: rgba(2,3,8,0.9); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-family: 'Rajdhani'; font-size: 0.75rem; padding: 0.4rem 0.6rem; border-radius: 0.4rem; }
+      .map-tooltip::before { border-top-color: rgba(2,3,8,0.9); }
+    `;
+    document.head.appendChild(style);
+  </script>
+</body>
+
+</html>
